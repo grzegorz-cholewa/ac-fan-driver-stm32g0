@@ -1,11 +1,9 @@
-<<<<<<< HEAD
+build/
+debug/
 *.o
-=======
 *.elf
-*.o
 *.obj
 *.hex
 *.map
->>>>>>> port-files
 *.d
 Debug/objects.list
