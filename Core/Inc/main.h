@@ -58,22 +58,28 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define TS4_CONN_Pin GPIO_PIN_13
-#define TS4_CONN_GPIO_Port GPIOC
-#define TS5_CONN_Pin GPIO_PIN_14
-#define TS5_CONN_GPIO_Port GPIOC
-#define TS6_CONN_Pin GPIO_PIN_15
-#define TS6_CONN_GPIO_Port GPIOC
-#define DBG_TX_Pin GPIO_PIN_2
-#define DBG_TX_GPIO_Port GPIOA
-#define DBG_RX_Pin GPIO_PIN_3
-#define DBG_RX_GPIO_Port GPIOA
-#define TS1_Pin GPIO_PIN_4
+#define TS4_EN_Pin GPIO_PIN_13
+#define TS4_EN_GPIO_Port GPIOC
+#define TS5_EN_Pin GPIO_PIN_14
+#define TS5_EN_GPIO_Port GPIOC
+#define TS6_EN_Pin GPIO_PIN_15
+#define TS6_EN_GPIO_Port GPIOC
+#define RS_TX_Pin GPIO_PIN_2
+#define RS_TX_GPIO_Port GPIOA
+#define RS_RX_Pin GPIO_PIN_3
+#define RS_RX_GPIO_Port GPIOA
+#define RS_DIR_Pin GPIO_PIN_4
+#define RS_DIR_GPIO_Port GPIOA
+#define TS1_Pin GPIO_PIN_5
 #define TS1_GPIO_Port GPIOA
-#define TS2_Pin GPIO_PIN_5
+#define TS2_Pin GPIO_PIN_6
 #define TS2_GPIO_Port GPIOA
-#define TS3_Pin GPIO_PIN_6
+#define TS3_Pin GPIO_PIN_7
 #define TS3_GPIO_Port GPIOA
+#define SPI_EN_Pin GPIO_PIN_1
+#define SPI_EN_GPIO_Port GPIOB
+#define ZERO_CROSSING_Pin GPIO_PIN_0
+#define ZERO_CROSSING_GPIO_Port GPIOD
 #define GATE1_Pin GPIO_PIN_1
 #define GATE1_GPIO_Port GPIOD
 #define GATE2_Pin GPIO_PIN_2
@@ -82,14 +88,10 @@ void Error_Handler(void);
 #define GATE3_GPIO_Port GPIOD
 #define LED_R_Pin GPIO_PIN_3
 #define LED_R_GPIO_Port GPIOB
-#define LED_G_Pin GPIO_PIN_4
-#define LED_G_GPIO_Port GPIOB
-#define RS_DIR_Pin GPIO_PIN_5
-#define RS_DIR_GPIO_Port GPIOB
-#define RS_TX_Pin GPIO_PIN_6
-#define RS_TX_GPIO_Port GPIOB
-#define RS_RX_Pin GPIO_PIN_7
-#define RS_RX_GPIO_Port GPIOB
+#define DBG_TX_Pin GPIO_PIN_6
+#define DBG_TX_GPIO_Port GPIOB
+#define DBX_RX_Pin GPIO_PIN_7
+#define DBX_RX_GPIO_Port GPIOB
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
