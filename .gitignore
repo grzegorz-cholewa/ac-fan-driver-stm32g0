@@ -1,9 +1,7 @@
-build/
-debug/
 *.o
 *.elf
 *.obj
 *.hex
 *.map
 *.d
-Debug/objects.list
+/Debug/
