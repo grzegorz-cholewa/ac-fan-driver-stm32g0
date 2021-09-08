@@ -109,7 +109,7 @@ int16_t check_for_error(sensors_t * sensor_array)
 
 	if (ret_val != 0)
 	{
-		log_usb(LEVEL_ERROR, "ERR: unexpected sensor read\n\r");
+		log_text(LEVEL_ERROR, "ERR: unexpected sensor read\n\r");
 	}
 
 	return ret_val;
