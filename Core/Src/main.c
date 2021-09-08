@@ -15,9 +15,8 @@
   *                        opensource.org/licenses/BSD-3-Clause
   *
   ******************************************************************************
-  USART1 is for Modbus communication (9600bits/s)
-  USART2 is for logging (115200bits/s)
-
+  USART1 is for debug logging (115200bits/s)
+  USART2 is for Modbus communication (9600bits/s)
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -326,10 +325,23 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	}
 
 	// Prepare for next byte receiving
-	HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
+	HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
 	if (status != HAL_OK)
 	{
 		log_text(LEVEL_ERROR, "ERR, cannot start HAL_UART_Transmit_IT\n\r");
+	}
+}
+
+/* UART TX finished callback */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (huart->Instance == USART1)
+	{
+		// debug uart transmit complete
+	}
+	if (huart->Instance == USART2)
+	{
+		// rs485 uart transmit complete
 	}
 }
 
@@ -373,12 +385,12 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim1);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER);
 
-  rs485_init(&huart1);
+  rs485_init(&huart2);
 //  update_working_parameters();
-  logger_init(&huart2, LEVEL_DEBUG);
+  logger_init(&huart1, LEVEL_DEBUG);
 
   // START RECEIVING BYTES
-  HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart_rx_byte, 1);
+  HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
   if (status != HAL_OK)
   {
 	  log_text(LEVEL_ERROR, "ERR: cannot start HAL_UART_Transmit_IT\n\r");
@@ -388,8 +400,8 @@ int main(void)
   while (1)
   {
 	  HAL_GPIO_TogglePin (GPIOB, LED_R_Pin);
-	  log_text(LEVEL_INFO, "INF: Init done. App is running\n\r");
-	  HAL_Delay (500);   /* Insert delay 100 ms */
+	  log_text(LEVEL_INFO, "UART test\n");
+	  HAL_Delay (500);
   }
   /* USER CODE END 2 */
 
@@ -622,7 +634,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
+  huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -670,7 +682,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
+  huart2.Init.BaudRate = 9600;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;

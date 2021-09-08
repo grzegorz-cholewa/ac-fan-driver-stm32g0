@@ -33,7 +33,7 @@ int log_text(int8_t log_level, char * format, ...)
 	va_end(argptr);
 
 	// send data
-	const int max_retries = 100;
+	const int max_retries = 3;
 	int retries = 0;
 	while (retries < max_retries)
 	{
@@ -46,7 +46,6 @@ int log_text(int8_t log_level, char * format, ...)
 		else
 		{
 			retries++;
-
 		}
 		if (retries >= max_retries)
 		{
