@@ -381,32 +381,30 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  logger_init(&huart1, LEVEL_DEBUG);
 
   HAL_TIM_Base_Start_IT(&htim1);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER);
-
   rs485_init(&huart2);
-//  update_working_parameters();
-  logger_init(&huart1, LEVEL_DEBUG);
-
-  // START RECEIVING BYTES
-  HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
+  update_working_parameters();
+  HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1); // start Modbus communication
   if (status != HAL_OK)
   {
 	  log_text(LEVEL_ERROR, "ERR: cannot start HAL_UART_Transmit_IT\n\r");
   }
 
   log_text(LEVEL_INFO, "INF: Init done. App is running\n\r");
-  while (1)
-  {
-	  HAL_GPIO_TogglePin (GPIOB, LED_R_Pin);
-	  log_text(LEVEL_INFO, "UART test\n");
-	  HAL_Delay (500);
-  }
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+	  HAL_GPIO_TogglePin (GPIOB, LED_R_Pin);
+	  log_text(LEVEL_INFO, "UART test\n\r");
+	  HAL_Delay (500);
+  }
   while (1)
   {
 	// Modbus request can be waiting if update_working_parameters() is running. Could it be a problem?
@@ -512,7 +510,7 @@ static void MX_ADC1_Init(void)
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.Resolution = ADC_RESOLUTION_10B;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;

@@ -75,8 +75,17 @@ int NTC_table[513] = {
 };
 
 
-int16_t ntc_to_temperature(uint16_t adc_value){
-	return NTC_table[adc_value/2]; // table consists of 512 elements, while 10-bit ADC have max value 1024
+int16_t ntc_to_temperature(uint16_t adc_value)
+{
+	int16_t tableIdx = adc_value/2;
+	if (tableIdx < sizeof(NTC_table)/sizeof(int))
+	{
+		return NTC_table[adc_value/2]; // table consists of 512 elements, while 10-bit ADC have max value 1024
+	}
+	else
+	{
+		return -999; // TODO: solve this better way
+	}
 };
 
 int16_t pt100_to_temperature(uint16_t adc_value){

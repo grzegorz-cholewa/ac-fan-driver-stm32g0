@@ -38,7 +38,9 @@ int log_text(int8_t log_level, char * format, ...)
 	while (retries < max_retries)
 	{
 		HAL_StatusTypeDef retVal;
-		retVal = HAL_UART_Transmit_IT(huart, (uint8_t*)string_buffer, strlen(string_buffer));
+
+		retVal = HAL_UART_Transmit(huart, (uint8_t*)string_buffer, strlen(string_buffer), 1000); // TODO: should be non-blocking
+//		retVal = HAL_UART_Transmit_IT(huart, (uint8_t*)string_buffer, strlen(string_buffer));
 		if (retVal == HAL_OK)
 		{
 			return 0;
