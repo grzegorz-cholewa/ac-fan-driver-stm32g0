@@ -665,11 +665,11 @@ void update_working_parameters()
 
 	// calculate temperatures from ADC values
 	sensors[0].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[1].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[2].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[3].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[4].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[5].temperature = pt100_to_temperature(sensors[0].adc_value);
+	sensors[1].temperature = ntc_to_temperature(sensors[1].adc_value);
+	sensors[2].temperature = ntc_to_temperature(sensors[2].adc_value);
+	sensors[3].temperature = ntc_to_temperature(sensors[3].adc_value);
+	sensors[4].temperature = ntc_to_temperature(sensors[4].adc_value);
+	sensors[5].temperature = pt100_to_temperature(sensors[5].adc_value);
 	temperature_error_state = check_for_error(sensors);
 
 	// log sensor data
