@@ -168,7 +168,7 @@ int main(void)
 	if (update_working_parameters_pending_flag == true)
 	{
 		update_working_parameters();
-		log_text(LEVEL_DEBUG, "DGG: update_working_parameters() execution time in us: %d\n\r", update_parameter_counter_us);
+//		log_text(LEVEL_DEBUG, "DGB: update_working_parameters() execution time in us: %d\n\r", update_parameter_counter_us);
 	}
 
 	if (modbus_request_pending_flag == true)
@@ -583,7 +583,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
 //	 measured ADC read time is about 300us
-//	log_usb(LEVEL_DEBUG, "DBG: HAL_ADC_ConvCpltCallback\n\r");
+	log_text(LEVEL_DEBUG, "DBG: HAL_ADC_ConvCpltCallback\n\r");
 }
 
 /* UART RX finished callback */
