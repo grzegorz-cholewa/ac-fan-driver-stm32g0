@@ -158,14 +158,13 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 //  while (1) // test loop
 //  {
+//	  HAL_Delay (1000);
 //	  HAL_GPIO_TogglePin (GPIOB, LED_R_Pin);
 //	  log_text(LEVEL_INFO, "Test loop running\n\r");
-//	  HAL_Delay (1000);
-//	  // Get ADC value
-//	  HAL_ADC_Start(&hadc1);
-//	  HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-//	  uint16_t raw = HAL_ADC_GetValue(&hadc1);
-//	  log_text(LEVEL_INFO, "Value %d\n\r", raw);
+//	  char string_buffer[] = "12345";
+//	  transmitter_enable();
+//	  HAL_UART_Transmit(&huart2, (uint8_t*)string_buffer, strlen(string_buffer), 1000);
+//	  transmitter_disable();
 //  }
   while (1)
   {
