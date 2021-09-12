@@ -101,250 +101,6 @@ void update_app_data(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-void update_working_parameters()
-{
-	log_text(LEVEL_INFO, "INF: Updating working parameters\n\r");
-	HAL_GPIO_TogglePin(GPIOB, LED_R_Pin);
-
-	// Update sensor connected status from user buttons
-	sensors[0].connected_status = true; // always connected internally
-	sensors[1].connected_status = true; // always connected internally
-	sensors[2].connected_status = true; // always connected internally
-//	sensors[3].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS4_sensor_connected_Pin);
-//	sensors[4].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS5_sensor_connected_Pin);
-//	sensors[5].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS6_sensor_connected_Pin);
-	sensors[3].connected_status = true; // temporary disable that
-	sensors[4].connected_status = true;
-	sensors[5].connected_status = true;
-
-	// get real ADC values to sensor_values array (for non-isolated sensors)
-	for (int i = 0; i < NON_ISOLATED_SENSOR_NUMBER; i++)
-	{
-		sensors[i].adc_value = dma_adc_array[i];
-	}
-	// get real ADC values to sensor_values array (for isolated sensors)
-	sensors[3].adc_value = 0; // TODO get real value from SPI ADC
-	sensors[4].adc_value = 0; // TODO get real value from SPI ADC
-	sensors[5].adc_value = 0; // TODO get real value from SPI ADC
-
-	// calculate temperatures from ADC values
-	sensors[0].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[1].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[2].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[3].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[4].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[5].temperature = pt100_to_temperature(sensors[0].adc_value);
-	temperature_error_state = check_for_error(sensors);
-
-	// log sensor data
-	log_text(LEVEL_INFO, "SEN CH | ADC  | TEMP | USED | ERR |\n\r-------|------|------|------|-----|\n\r");
-	for (int channel = 0; channel < TOTAL_SENSOR_NUMBER; channel++)
-	{
-	  log_text(LEVEL_INFO, "     %d | %04d | %04d |  %d   |  %d  |\n\r", channel+1, sensors[channel].adc_value, sensors[channel].temperature, (int)(sensors[channel].connected_status), sensors[channel].error);
-	}
-
-	// run PI regulator calculations
-	for (uint8_t i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
-	{
-		if (channel_array[i].work_state == WORK_STATE_AUTO)
-		{
-			channel_array[i].output_voltage_decpercent = pi_regulator(i, sensors[i].temperature, channel_array[i].setpoint);
-		}
-		channel_array[i].activation_delay_us = get_gate_delay_us(channel_array[i].output_voltage_decpercent);
-	}
-
-	// log fan channel data
-	log_text(LEVEL_INFO, "FAN CH | SETPOINT | VOLTAGE | DELAY_US |\n\r-------|----------|---------|----------|\n\r");
-	for (int i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
-	{
-		log_text(LEVEL_INFO, "   %d   |    %02d    |   %03d   |    %d   |\n\r", i+1, channel_array[i].setpoint/10, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
-	}
-	update_working_parameters_pending_flag = false;
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER); // start ADC read for next update cycle
-}
-
-
-int16_t pi_regulator(uint8_t channel, int16_t current_temp, int16_t setpoint)
-{
-	int16_t error;
-	static int16_t integral_error[3] = {0, 0, 0};
-	int16_t output_voltage_decpercent;
-
-	error = current_temp - setpoint;
-
-	integral_error[channel] = integral_error[channel] + error;
-
-	if ((error>0) && (integral_error[channel] <350*TIME_CONST))
-		integral_error[channel] = 350*TIME_CONST;
-
-	if (integral_error[channel] > INTEGRAL_ERROR_MAX)
-		integral_error[channel] = INTEGRAL_ERROR_MAX;
-	if (integral_error[channel] < INTEGRAL_ERROR_MIN)
-		integral_error[channel] = INTEGRAL_ERROR_MIN;
-
-	output_voltage_decpercent = PI_KP * error  + integral_error[channel]/TIME_CONST;
-
-	if (output_voltage_decpercent > MAX_OUTPUT_VOLTAGE_DECPERCENT)
-		output_voltage_decpercent = FULL_ON_OUTPUT_VOLTAGE_DECPERCENT;
-
-	if (output_voltage_decpercent < MIN_OUTPUT_VOLTAGE_DECPERCENT)
-		output_voltage_decpercent = FULL_OFF_OUTPUT_VOLTAGE_DECPERCENT;
-
-	return output_voltage_decpercent;
-};
-
-
-void update_modbus_registers(void)
-{
-	log_text(LEVEL_INFO, "INF: Updating Modbus registers with data from app before processing request\n\r");
-	modbus_set_reg_value(0, channel_array[0].work_state);
-	modbus_set_reg_value(1, channel_array[1].work_state);
-	modbus_set_reg_value(2, channel_array[2].work_state);
-	modbus_set_reg_value(3, channel_array[0].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(4, channel_array[1].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(5, channel_array[2].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(6, channel_array[0].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(7, channel_array[1].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(8, channel_array[2].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(9, sensors[0].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(10, sensors[1].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(11, sensors[2].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(12, sensors[3].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(13, sensors[4].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(14, sensors[5].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(15, temperature_error_state);
-}
-
-
-void update_app_data(void)
-{
-	log_text(LEVEL_INFO, "INF: Updating app data with data from Modbus registers\n\r");
-	channel_array[0].work_state = modbus_get_reg_value(0);
-	channel_array[1].work_state = modbus_get_reg_value(1);
-	channel_array[2].work_state = modbus_get_reg_value(2);
-
-	if ((modbus_get_reg_value(3)) != channel_array[0].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
-	{
-		channel_array[0].work_state = WORK_STATE_MANUAL;
-		channel_array[0].output_voltage_decpercent = modbus_get_reg_value(3)*VOLTAGE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(4) != channel_array[1].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
-	{
-		channel_array[1].work_state = WORK_STATE_MANUAL;
-		channel_array[1].output_voltage_decpercent = modbus_get_reg_value(4)*VOLTAGE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(5) != channel_array[2].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
-	{
-		channel_array[2].work_state = WORK_STATE_MANUAL;
-		channel_array[2].output_voltage_decpercent = modbus_get_reg_value(5)*VOLTAGE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(6) != (channel_array[0].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
-	{
-		channel_array[0].work_state = WORK_STATE_AUTO;
-		channel_array[0].setpoint = modbus_get_reg_value(6)*TEMPERATURE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(7) != (channel_array[1].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
-	{
-		channel_array[1].work_state = WORK_STATE_AUTO;
-		channel_array[1].setpoint = modbus_get_reg_value(7)*TEMPERATURE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(8) != (channel_array[2].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
-	{
-		channel_array[2].work_state = WORK_STATE_AUTO;
-		channel_array[2].setpoint = modbus_get_reg_value(8)*TEMPERATURE_PRECISION_MULTIPLIER;
-	}
-}
-
-void reset_zero_crossing_counter(void)
-{
-	if (gate_pulse_delay_counter_us > HALF_SINE_PERIOD_US - 500)
-	{
-		gate_pulse_delay_counter_us = 0;
-	}
-}
-
-/* Timer 1 overflow interrupt callback */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-	if (htim->Instance == TIM3)
-	{
-		drive_fans(channel_array, OUTPUT_CHANNELS_NUMBER, gate_pulse_delay_counter_us);
-
-		gate_pulse_delay_counter_us += MAIN_TIMER_RESOLUTION_US;
-		update_parameter_counter_us += MAIN_TIMER_RESOLUTION_US;
-		rx_time_interval_counter += MAIN_TIMER_RESOLUTION_US;
-
-		if(update_parameter_counter_us >= WORKING_PARAMETERS_UPDATE_PERIOD_US)
-		{
-			update_working_parameters_pending_flag = true;
-			update_parameter_counter_us = 0;
-		}
-	}
-
-	if ( (rx_time_interval_counter > MAX_TIME_BETWEEN_FRAMES_US) && (!rs485_rx_buffer_empty()) )
-	{
-		rs485_get_frame(received_modbus_frame, RS_RX_BUFFER_SIZE);
-		modbus_request_pending_flag = true;
-	}
-}
-
-/* ADC conversion finished callback */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-//	 measured ADC read time is about 300us
-//	log_usb(LEVEL_DEBUG, "DBG: HAL_ADC_ConvCpltCallback\n\r");
-}
-
-/* UART RX finished callback */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-	log_text(LEVEL_DEBUG, "Serial received a byte: %02x\n\r", uart_rx_byte);
-
-	if (modbus_request_pending_flag == true)
-	{
-		return;
-	}
-	else
-	{
-		rx_time_interval_counter = 0;
-
-		if (rs485_collect_byte_to_buffer(&uart_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
-		{
-			modbus_frame_byte_counter++;
-		}
-		else
-		{
-			log_text(LEVEL_ERROR, "ERR: cannot get byte to buffer (buffer full)\n\r");
-			modbus_frame_byte_counter = 0;
-		}
-	}
-
-	// Prepare for next byte receiving
-	HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
-	if (status != HAL_OK)
-	{
-		log_text(LEVEL_ERROR, "ERR, cannot start HAL_UART_Transmit_IT\n\r");
-	}
-}
-
-/* UART TX finished callback */
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-	if (huart->Instance == USART1)
-	{
-		// debug uart transmit complete
-	}
-	if (huart->Instance == USART2)
-	{
-		// rs485 uart transmit complete
-	}
-}
-
 /* USER CODE END 0 */
 
 /**
@@ -792,11 +548,255 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
 }
+
 
 /* USER CODE BEGIN 4 */
 
+
+/* Timer 1 overflow interrupt callback */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if (htim->Instance == TIM3)
+	{
+		drive_fans(channel_array, OUTPUT_CHANNELS_NUMBER, gate_pulse_delay_counter_us);
+
+		gate_pulse_delay_counter_us += MAIN_TIMER_RESOLUTION_US;
+		update_parameter_counter_us += MAIN_TIMER_RESOLUTION_US;
+		rx_time_interval_counter += MAIN_TIMER_RESOLUTION_US;
+
+		if(update_parameter_counter_us >= WORKING_PARAMETERS_UPDATE_PERIOD_US)
+		{
+			update_working_parameters_pending_flag = true;
+			update_parameter_counter_us = 0;
+		}
+	}
+
+	if ( (rx_time_interval_counter > MAX_TIME_BETWEEN_FRAMES_US) && (!rs485_rx_buffer_empty()) )
+	{
+		rs485_get_frame(received_modbus_frame, RS_RX_BUFFER_SIZE);
+		modbus_request_pending_flag = true;
+	}
+}
+
+/* ADC conversion finished callback */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+//	 measured ADC read time is about 300us
+//	log_usb(LEVEL_DEBUG, "DBG: HAL_ADC_ConvCpltCallback\n\r");
+}
+
+/* UART RX finished callback */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	log_text(LEVEL_DEBUG, "Serial received a byte: %02x\n\r", uart_rx_byte);
+
+	if (modbus_request_pending_flag == true)
+	{
+		return;
+	}
+	else
+	{
+		rx_time_interval_counter = 0;
+
+		if (rs485_collect_byte_to_buffer(&uart_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
+		{
+			modbus_frame_byte_counter++;
+		}
+		else
+		{
+			log_text(LEVEL_ERROR, "ERR: cannot get byte to buffer (buffer full)\n\r");
+			modbus_frame_byte_counter = 0;
+		}
+	}
+
+	// Prepare for next byte receiving
+	HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
+	if (status != HAL_OK)
+	{
+		log_text(LEVEL_ERROR, "ERR, cannot start HAL_UART_Transmit_IT\n\r");
+	}
+}
+
+/* UART TX finished callback */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (huart->Instance == USART1)
+	{
+		// debug uart transmit complete
+	}
+	if (huart->Instance == USART2)
+	{
+		// rs485 uart transmit complete
+	}
+}
+
+void update_working_parameters()
+{
+	log_text(LEVEL_INFO, "INF: Updating working parameters\n\r");
+	HAL_GPIO_TogglePin(GPIOB, LED_R_Pin);
+
+	// Update sensor connected status from user buttons
+	sensors[0].connected_status = true; // always connected internally
+	sensors[1].connected_status = true; // always connected internally
+	sensors[2].connected_status = true; // always connected internally
+//	sensors[3].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS4_sensor_connected_Pin);
+//	sensors[4].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS5_sensor_connected_Pin);
+//	sensors[5].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS6_sensor_connected_Pin);
+	sensors[3].connected_status = true; // temporary disable that
+	sensors[4].connected_status = true;
+	sensors[5].connected_status = true;
+
+	// get real ADC values to sensor_values array (for non-isolated sensors)
+	for (int i = 0; i < NON_ISOLATED_SENSOR_NUMBER; i++)
+	{
+		sensors[i].adc_value = dma_adc_array[i];
+	}
+	// get real ADC values to sensor_values array (for isolated sensors)
+	sensors[3].adc_value = 0; // TODO get real value from SPI ADC
+	sensors[4].adc_value = 0; // TODO get real value from SPI ADC
+	sensors[5].adc_value = 0; // TODO get real value from SPI ADC
+
+	// calculate temperatures from ADC values
+	sensors[0].temperature = ntc_to_temperature(sensors[0].adc_value);
+	sensors[1].temperature = ntc_to_temperature(sensors[0].adc_value);
+	sensors[2].temperature = ntc_to_temperature(sensors[0].adc_value);
+	sensors[3].temperature = ntc_to_temperature(sensors[0].adc_value);
+	sensors[4].temperature = ntc_to_temperature(sensors[0].adc_value);
+	sensors[5].temperature = pt100_to_temperature(sensors[0].adc_value);
+	temperature_error_state = check_for_error(sensors);
+
+	// log sensor data
+	log_text(LEVEL_INFO, "SEN CH | ADC  | TEMP | USED | ERR |\n\r-------|------|------|------|-----|\n\r");
+	for (int channel = 0; channel < TOTAL_SENSOR_NUMBER; channel++)
+	{
+	  log_text(LEVEL_INFO, "     %d | %04d | %04d |  %d   |  %d  |\n\r", channel+1, sensors[channel].adc_value, sensors[channel].temperature, (int)(sensors[channel].connected_status), sensors[channel].error);
+	}
+
+	// run PI regulator calculations
+	for (uint8_t i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
+	{
+		if (channel_array[i].work_state == WORK_STATE_AUTO)
+		{
+			channel_array[i].output_voltage_decpercent = pi_regulator(i, sensors[i].temperature, channel_array[i].setpoint);
+		}
+		channel_array[i].activation_delay_us = get_gate_delay_us(channel_array[i].output_voltage_decpercent);
+	}
+
+	// log fan channel data
+	log_text(LEVEL_INFO, "FAN CH | SETPOINT | VOLTAGE | DELAY_US |\n\r-------|----------|---------|----------|\n\r");
+	for (int i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
+	{
+		log_text(LEVEL_INFO, "   %d   |    %02d    |   %03d   |    %d   |\n\r", i+1, channel_array[i].setpoint/10, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
+	}
+	update_working_parameters_pending_flag = false;
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER); // start ADC read for next update cycle
+}
+
+
+int16_t pi_regulator(uint8_t channel, int16_t current_temp, int16_t setpoint)
+{
+	int16_t error;
+	static int16_t integral_error[3] = {0, 0, 0};
+	int16_t output_voltage_decpercent;
+
+	error = current_temp - setpoint;
+
+	integral_error[channel] = integral_error[channel] + error;
+
+	if ((error>0) && (integral_error[channel] <350*TIME_CONST))
+		integral_error[channel] = 350*TIME_CONST;
+
+	if (integral_error[channel] > INTEGRAL_ERROR_MAX)
+		integral_error[channel] = INTEGRAL_ERROR_MAX;
+	if (integral_error[channel] < INTEGRAL_ERROR_MIN)
+		integral_error[channel] = INTEGRAL_ERROR_MIN;
+
+	output_voltage_decpercent = PI_KP * error  + integral_error[channel]/TIME_CONST;
+
+	if (output_voltage_decpercent > MAX_OUTPUT_VOLTAGE_DECPERCENT)
+		output_voltage_decpercent = FULL_ON_OUTPUT_VOLTAGE_DECPERCENT;
+
+	if (output_voltage_decpercent < MIN_OUTPUT_VOLTAGE_DECPERCENT)
+		output_voltage_decpercent = FULL_OFF_OUTPUT_VOLTAGE_DECPERCENT;
+
+	return output_voltage_decpercent;
+};
+
+
+void update_modbus_registers(void)
+{
+	log_text(LEVEL_INFO, "INF: Updating Modbus registers with data from app before processing request\n\r");
+	modbus_set_reg_value(0, channel_array[0].work_state);
+	modbus_set_reg_value(1, channel_array[1].work_state);
+	modbus_set_reg_value(2, channel_array[2].work_state);
+	modbus_set_reg_value(3, channel_array[0].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(4, channel_array[1].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(5, channel_array[2].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(6, channel_array[0].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(7, channel_array[1].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(8, channel_array[2].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(9, sensors[0].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(10, sensors[1].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(11, sensors[2].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(12, sensors[3].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(13, sensors[4].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(14, sensors[5].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
+	modbus_set_reg_value(15, temperature_error_state);
+}
+
+
+void update_app_data(void)
+{
+	log_text(LEVEL_INFO, "INF: Updating app data with data from Modbus registers\n\r");
+	channel_array[0].work_state = modbus_get_reg_value(0);
+	channel_array[1].work_state = modbus_get_reg_value(1);
+	channel_array[2].work_state = modbus_get_reg_value(2);
+
+	if ((modbus_get_reg_value(3)) != channel_array[0].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
+	{
+		channel_array[0].work_state = WORK_STATE_MANUAL;
+		channel_array[0].output_voltage_decpercent = modbus_get_reg_value(3)*VOLTAGE_PRECISION_MULTIPLIER;
+	}
+
+	if (modbus_get_reg_value(4) != channel_array[1].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
+	{
+		channel_array[1].work_state = WORK_STATE_MANUAL;
+		channel_array[1].output_voltage_decpercent = modbus_get_reg_value(4)*VOLTAGE_PRECISION_MULTIPLIER;
+	}
+
+	if (modbus_get_reg_value(5) != channel_array[2].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
+	{
+		channel_array[2].work_state = WORK_STATE_MANUAL;
+		channel_array[2].output_voltage_decpercent = modbus_get_reg_value(5)*VOLTAGE_PRECISION_MULTIPLIER;
+	}
+
+	if (modbus_get_reg_value(6) != (channel_array[0].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
+	{
+		channel_array[0].work_state = WORK_STATE_AUTO;
+		channel_array[0].setpoint = modbus_get_reg_value(6)*TEMPERATURE_PRECISION_MULTIPLIER;
+	}
+
+	if (modbus_get_reg_value(7) != (channel_array[1].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
+	{
+		channel_array[1].work_state = WORK_STATE_AUTO;
+		channel_array[1].setpoint = modbus_get_reg_value(7)*TEMPERATURE_PRECISION_MULTIPLIER;
+	}
+
+	if (modbus_get_reg_value(8) != (channel_array[2].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
+	{
+		channel_array[2].work_state = WORK_STATE_AUTO;
+		channel_array[2].setpoint = modbus_get_reg_value(8)*TEMPERATURE_PRECISION_MULTIPLIER;
+	}
+}
+
+void reset_zero_crossing_counter(void)
+{
+	if (gate_pulse_delay_counter_us > HALF_SINE_PERIOD_US - 500)
+	{
+		gate_pulse_delay_counter_us = 0;
+	}
+}
 /* USER CODE END 4 */
 
 /**
