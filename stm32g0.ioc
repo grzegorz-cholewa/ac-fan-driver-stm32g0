@@ -94,6 +94,7 @@ NVIC.PendSV_IRQn=true\:0\:0\:false\:false\:true\:false\:false
 NVIC.SVC_IRQn=true\:0\:0\:false\:false\:true\:false\:false
 NVIC.SysTick_IRQn=true\:0\:0\:false\:false\:true\:false\:true
 NVIC.TIM3_IRQn=true\:0\:0\:false\:false\:true\:true\:true
+NVIC.USART1_IRQn=true\:0\:0\:false\:false\:true\:true\:true
 NVIC.USART2_IRQn=true\:0\:0\:false\:false\:true\:true\:true
 PA13.Locked=true
 PA13.Mode=Serial_Wire

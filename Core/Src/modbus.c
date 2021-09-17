@@ -52,23 +52,23 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 	uint16_t crc_received = get_short_little_endian(request+request_size-2);
 	if (crc_calculated != crc_received)
 	{
-		log_text(LEVEL_ERROR, "ERR: modbus_process_frame, CRC does not match\n\r");
+		logger_log(LEVEL_ERROR, "ERR: modbus_process_frame, CRC does not match\r\n");
 		return false;
 	}
 	
 	switch (request[POSITION_FUNCTION])
 	{
 		case FUNCTION_READ_MULTIPLE:
-			log_text(LEVEL_INFO, "INF: Modbus read request received, function 0x%02x\n\r", FUNCTION_READ_MULTIPLE);
+			logger_log(LEVEL_INFO, "INF: Modbus read request received, function 0x%02x\r\n", FUNCTION_READ_MULTIPLE);
 			print_buffer(request, request_size);
 			asm("NOP"); // needed for turn off compiler warning "a label can only be part of a statement and a declaration is not a statement"
 			uint16_t first_address_offset = get_short_big_endian(request+2);
 			uint16_t registers_number = get_short_big_endian(request+4);
-			log_text(LEVEL_DEBUG, "first register offset: %d, number of registers: %d\n\r", first_address_offset, registers_number);
+			logger_log(LEVEL_DEBUG, "first register offset: %d, number of registers: %d\r\n", first_address_offset, registers_number);
 
 			if ( (first_address_offset >= REGISTERS_NUMBER) || (registers_number > REGISTERS_NUMBER) )
 			{
-				log_text(LEVEL_ERROR, "ERR: requested Modbus registers not valid\n\r");
+				logger_log(LEVEL_ERROR, "ERR: requested Modbus registers not valid\r\n");
 				return false;
 			}
 
@@ -94,12 +94,12 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			break;
 	
 		case FUNCTION_WRITE_SINGLE:
-			log_text(LEVEL_INFO, "INF: Modbus write request received, function 0x%02x\n\r", FUNCTION_WRITE_SINGLE);
+			logger_log(LEVEL_INFO, "INF: Modbus write request received, function 0x%02x\r\n", FUNCTION_WRITE_SINGLE);
 			print_buffer(request, request_size);
 			asm("NOP"); // needed for turn off compiler warning "a label can only be part of a statement and a declaration is not a statement"
 			uint16_t register_offset = get_short_big_endian(request+2);
 			int16_t value_to_set = get_short_big_endian(request+4);
-			log_text(LEVEL_DEBUG, "DBG: setting register with offset %d, value to set: %d\n\r", register_offset, value_to_set);
+			logger_log(LEVEL_DEBUG, "DBG: setting register with offset %d, value to set: %d\r\n", register_offset, value_to_set);
 
 			if (register_offset > MAX_REGISTERS_OFFSET)
 			{
@@ -108,7 +108,7 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 
 			if (register_offset >= REGISTERS_NUMBER)
 			{
-				log_text(LEVEL_ERROR, "ERR: requested Modbus registers not valid\n\r");
+				logger_log(LEVEL_ERROR, "ERR: requested Modbus registers not valid\r\n");
 				return false;
 			}
 
@@ -118,7 +118,7 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			break;
 
 		default:
-			log_text(LEVEL_ERROR, "ERR: modbus_process_frame, unsupported function detected\n\r");
+			logger_log(LEVEL_ERROR, "ERR: modbus_process_frame, unsupported function detected\r\n");
 			return false;
 	}
 	return true;
@@ -151,10 +151,10 @@ uint16_t get_short_big_endian(uint8_t * first_byte_pointer) // first byte is hig
 
 void print_buffer(uint8_t * buffer, uint16_t length)
 {
-	log_text(LEVEL_DEBUG, "DBG: ");
+	logger_log(LEVEL_DEBUG, "DBG: ");
 	for (int index = 0; index < length; index++)
 	{
-		log_text(LEVEL_DEBUG, "0x%02x | ", *(buffer + index));
+		logger_log(LEVEL_DEBUG, "0x%02x | ", *(buffer + index));
 	}
-	log_text(LEVEL_DEBUG, "\n\r");
+	logger_log(LEVEL_DEBUG, "\r\n");
 }

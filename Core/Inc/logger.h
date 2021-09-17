@@ -7,7 +7,7 @@
 
 // Sample use:
 // logger_set_level(LEVEL_ERROR); // set log level first
-// log_usb(LEVEL_ERROR, "Error code: %d\n\r", err_code);
+// log_text(LEVEL_ERROR, "Error code: %d\r\n", err_code);
 
 #include "stm32g0xx_hal.h"
 
@@ -25,4 +25,16 @@ void logger_init(UART_HandleTypeDef * huartPointer, int8_t level_to_set);
  * @param format: formatted string
  * @return 0 if success, non-zero otherwise
  */
-int log_text(int8_t log_level, char * format, ...);
+int logger_log(int8_t log_level, char * format, ...);
+
+/**
+//TODO add description
+ *
+ */
+void transmit_byte();
+
+/**
+//TODO add description
+ *
+ */
+void logger_transmit_complete();

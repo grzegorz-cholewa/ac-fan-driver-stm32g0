@@ -2,57 +2,97 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
+#include <buffer.h>
 
-enum log_level_type level = LEVEL_INFO; // this is a default logging level
+#define buffer_size (1000)
+#define max_string_size (100)
+
+
 UART_HandleTypeDef * huart;
+cbuf_handle_t cbuf;
+bool transmitting_now = false;
+enum log_level_type level = LEVEL_INFO; // default logging level
+uint8_t buffer[buffer_size];
+uint8_t transmit_buffer;
+
+uint8_t get_level();
+void transmit_byte();
+
 
 void logger_init(UART_HandleTypeDef * huartPointer, int8_t level_to_set)
 {
 	huart = huartPointer;
 	level = level_to_set;
+	cbuf = circular_buf_init(buffer, buffer_size);
+
+	logger_log(LEVEL_INFO, "Logger init complete\r\n");
 }
+
+
+int logger_log(int8_t log_level, char * format, ...)
+{
+	if (get_level() < log_level)
+	{
+		return 0;
+	}
+
+	char temp_buffer[max_string_size];
+
+	// create string from format and arguments
+	va_list argptr;
+	va_start(argptr, format);
+	vsnprintf(temp_buffer, strlen(format), format, argptr);
+	va_end(argptr);
+
+	// put data to buffer
+	for (int byte_count = 0; byte_count < strlen(temp_buffer); byte_count++)
+	{
+		circular_buf_put2(cbuf, temp_buffer[byte_count]);
+	}
+
+	transmit_byte();
+
+	return 0;
+}
+
+
+void logger_transmit_complete()
+{
+	transmitting_now = false;
+	transmit_byte();
+}
+
 
 uint8_t get_level()
 {
 	return (uint8_t)level;
 }
 
-int log_text(int8_t log_level, char * format, ...)
+
+void transmit_byte()
 {
-	if (get_level() < log_level)
+	// read from buffer if there is something to read
+	if (transmitting_now)
 	{
-		return 0;
+		return;
 	}
-	uint8_t max_string_len = 100;
-	char string_buffer[max_string_len];
-
-	// create string from format and arguments
-	va_list argptr;
-	va_start(argptr, format);
-	vsnprintf(string_buffer, max_string_len, format, argptr);
-	va_end(argptr);
-
-	// send data
-	const int max_retries = 3;
-	int retries = 0;
-	while (retries < max_retries)
+	if(!circular_buf_empty(cbuf))
 	{
-		HAL_StatusTypeDef retVal;
-
-		retVal = HAL_UART_Transmit(huart, (uint8_t*)string_buffer, strlen(string_buffer), 1000); // TODO: should be non-blocking
-//		retVal = HAL_UART_Transmit_IT(huart, (uint8_t*)string_buffer, strlen(string_buffer));
+		circular_buf_get(cbuf, &transmit_buffer);
+		HAL_StatusTypeDef retVal = HAL_UART_Transmit_IT(huart, &transmit_buffer, 1);
 		if (retVal == HAL_OK)
 		{
-			return 0;
-		}
-		else
-		{
-			retries++;
-		}
-		if (retries >= max_retries)
-		{
-			return 1;
+			transmitting_now = true;
 		}
 	}
-	return 0;
+	else
+	{
+		// empty buffer, nothing to read
+		return;
+	}
 }
+
+

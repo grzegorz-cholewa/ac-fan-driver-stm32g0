@@ -118,7 +118,7 @@ int16_t check_for_error(sensors_t * sensor_array)
 
 	if (ret_val != 0)
 	{
-		log_text(LEVEL_ERROR, "ERR: unexpected sensor read\n\r");
+		logger_log(LEVEL_ERROR, "ERR: unexpected sensor read\r\n");
 	}
 
 	return ret_val;
