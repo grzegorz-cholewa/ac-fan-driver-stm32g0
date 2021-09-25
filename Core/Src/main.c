@@ -15,6 +15,9 @@
   *                        opensource.org/licenses/BSD-3-Clause
   *
   ******************************************************************************
+  Project was setup with CubeMX 6.2.1
+  It works under System Workbench for STM32 environment
+
   USART1 is for debug logging (115200bits/s)
   USART2 is for Modbus communication (9600bits/s)
   */
@@ -76,9 +79,9 @@ uint8_t received_modbus_frame[RS_RX_BUFFER_SIZE];
 uint16_t modbus_frame_byte_counter = 0;
 
 static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
-	{GATE1_Pin, 0, WORK_STATE_AUTO, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE},
-	{GATE2_Pin, 1, WORK_STATE_AUTO, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE},
-	{GATE3_Pin, 2, WORK_STATE_AUTO, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE}
+	{GATE1_Pin, 0, WORK_STATE_MANUAL, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE},
+	{GATE2_Pin, 1, WORK_STATE_MANUAL, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE},
+	{GATE3_Pin, 2, WORK_STATE_MANUAL, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE}
 };
 uint8_t uart_rx_byte = 0;
 /* USER CODE END PV */
@@ -96,6 +99,7 @@ int16_t pi_regulator(uint8_t channel, int16_t current_temp, int16_t target_tempe
 void update_working_parameters(void);
 void update_modbus_registers(void);
 void update_app_data(void);
+void reset_zero_crossing_counter(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -149,6 +153,8 @@ int main(void)
   {
 	  logger_log(LEVEL_ERROR, "ERR: cannot start HAL_UART_Transmit_IT\r\n");
   }
+
+//  HAL_EXTI_RegisterCallback(HAL_EXTI_RISING_CB_ID, &reset_zero_crossing_counter());
 
   logger_log(LEVEL_INFO, "INF: Init done. App is running\r\n");
 
@@ -563,6 +569,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
+
 }
 
 /* USER CODE BEGIN 4 */
@@ -603,7 +613,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 /* UART RX finished callback */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	logger_log(LEVEL_DEBUG, "DBG: Serial received a byte: %02x\r\n", uart_rx_byte);
+	logger_log(LEVEL_DEBUG, "DBG: Received 0x02x\r\n", uart_rx_byte);
 
 	if (modbus_request_pending_flag == true)
 	{
@@ -764,7 +774,7 @@ void update_modbus_registers(void)
 
 void update_app_data(void)
 {
-	logger_log(LEVEL_INFO, "INF: Updating app data with data from Modbus registers\r\n");
+	logger_log(LEVEL_INFO, "INF: Updating app data from registers\r\n");
 	channel_array[0].work_state = modbus_get_reg_value(0);
 	channel_array[1].work_state = modbus_get_reg_value(1);
 	channel_array[2].work_state = modbus_get_reg_value(2);

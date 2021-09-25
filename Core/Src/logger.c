@@ -44,7 +44,7 @@ int logger_log(int8_t log_level, char * format, ...)
 	// create string from format and arguments
 	va_list argptr;
 	va_start(argptr, format);
-	vsnprintf(temp_buffer, strlen(format), format, argptr);
+	vsnprintf(temp_buffer, strlen(format)+1, format, argptr);
 	va_end(argptr);
 
 	// put data to buffer

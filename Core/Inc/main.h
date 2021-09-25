@@ -80,6 +80,7 @@ void Error_Handler(void);
 #define SPI_EN_GPIO_Port GPIOB
 #define ZERO_CROSSING_Pin GPIO_PIN_0
 #define ZERO_CROSSING_GPIO_Port GPIOD
+#define ZERO_CROSSING_EXTI_IRQn EXTI0_1_IRQn
 #define GATE1_Pin GPIO_PIN_1
 #define GATE1_GPIO_Port GPIOD
 #define GATE2_Pin GPIO_PIN_2

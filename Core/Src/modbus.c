@@ -59,12 +59,11 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 	switch (request[POSITION_FUNCTION])
 	{
 		case FUNCTION_READ_MULTIPLE:
-			logger_log(LEVEL_INFO, "INF: Modbus read request received, function 0x%02x\r\n", FUNCTION_READ_MULTIPLE);
-			print_buffer(request, request_size);
 			asm("NOP"); // needed for turn off compiler warning "a label can only be part of a statement and a declaration is not a statement"
 			uint16_t first_address_offset = get_short_big_endian(request+2);
 			uint16_t registers_number = get_short_big_endian(request+4);
-			logger_log(LEVEL_DEBUG, "first register offset: %d, number of registers: %d\r\n", first_address_offset, registers_number);
+			logger_log(LEVEL_INFO, "INF: Modbus read request received, function 0x%02x, first register offset: %d, number of registers: %d\r\n", FUNCTION_READ_MULTIPLE, first_address_offset, registers_number);
+			print_buffer(request, request_size);
 
 			if ( (first_address_offset >= REGISTERS_NUMBER) || (registers_number > REGISTERS_NUMBER) )
 			{
