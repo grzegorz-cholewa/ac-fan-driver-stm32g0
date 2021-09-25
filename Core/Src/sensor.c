@@ -108,7 +108,7 @@ int16_t check_for_error(sensors_t * sensor_array)
 			{
 				sensor_array[i].error = 1;
 				ret_val |= 1 << i; // if error is detected on given 'i' channel, set proper bit to 1 to indicate error on that channel
-				logger_log(LEVEL_ERROR, "ERR: Temperature out of range on ch %d\r\n", i+1); // i counts from 0, sensors are counted from 1
+				logger_log(LEVEL_ERROR, "Temperature out of range on ch %d\r\n", i+1); // i counts from 0, sensors are counted from 1
 			}
 		}
 		else

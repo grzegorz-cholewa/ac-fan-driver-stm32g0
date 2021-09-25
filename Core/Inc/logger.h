@@ -11,7 +11,7 @@
 
 #include "stm32g0xx_hal.h"
 
-enum log_level_type {LEVEL_NONE = 0, LEVEL_ERROR = 1, LEVEL_INFO = 2, LEVEL_DEBUG = 3};
+enum log_level_type {LEVEL_ERROR = 0, LEVEL_INFO = 1, LEVEL_DEBUG = 2};
 
 /**
  * Sets logger level

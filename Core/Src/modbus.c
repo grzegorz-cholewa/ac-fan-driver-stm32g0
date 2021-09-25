@@ -62,12 +62,12 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			asm("NOP"); // needed for turn off compiler warning "a label can only be part of a statement and a declaration is not a statement"
 			uint16_t first_address_offset = get_short_big_endian(request+2);
 			uint16_t registers_number = get_short_big_endian(request+4);
-			logger_log(LEVEL_INFO, "INF: Modbus read request received, function 0x%02x, first register offset: %d, number of registers: %d\r\n", FUNCTION_READ_MULTIPLE, first_address_offset, registers_number);
+			logger_log(LEVEL_INFO, "Modbus read request received, function 0x%02x, first register offset: %d, number of registers: %d\r\n", FUNCTION_READ_MULTIPLE, first_address_offset, registers_number);
 			print_buffer(request, request_size);
 
 			if ( (first_address_offset >= REGISTERS_NUMBER) || (registers_number > REGISTERS_NUMBER) )
 			{
-				logger_log(LEVEL_ERROR, "ERR: requested Modbus registers not valid\r\n");
+				logger_log(LEVEL_ERROR, "Requested registers not valid\r\n");
 				return false;
 			}
 
@@ -93,21 +93,16 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			break;
 	
 		case FUNCTION_WRITE_SINGLE:
-			logger_log(LEVEL_INFO, "INF: Modbus write request received, function 0x%02x\r\n", FUNCTION_WRITE_SINGLE);
+			logger_log(LEVEL_INFO, "Modbus write request received, function 0x%02x\r\n", FUNCTION_WRITE_SINGLE);
 			print_buffer(request, request_size);
 			asm("NOP"); // needed for turn off compiler warning "a label can only be part of a statement and a declaration is not a statement"
 			uint16_t register_offset = get_short_big_endian(request+2);
 			int16_t value_to_set = get_short_big_endian(request+4);
-			logger_log(LEVEL_DEBUG, "DBG: setting register with offset %d, value to set: %d\r\n", register_offset, value_to_set);
-
-			if (register_offset > MAX_REGISTERS_OFFSET)
-			{
-				return false;
-			}
+			logger_log(LEVEL_DEBUG, "Writing register. Offset %d, value to set: %d\r\n", register_offset, value_to_set);
 
 			if (register_offset >= REGISTERS_NUMBER)
 			{
-				logger_log(LEVEL_ERROR, "ERR: requested Modbus registers not valid\r\n");
+				logger_log(LEVEL_ERROR, "Requested registers not valid\r\n");
 				return false;
 			}
 
@@ -117,7 +112,7 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			break;
 
 		default:
-			logger_log(LEVEL_ERROR, "ERR: modbus_process_frame, unsupported function detected\r\n");
+			logger_log(LEVEL_ERROR, "Unsupported Modbus function\r\n");
 			return false;
 	}
 	return true;
@@ -150,10 +145,8 @@ uint16_t get_short_big_endian(uint8_t * first_byte_pointer) // first byte is hig
 
 void print_buffer(uint8_t * buffer, uint16_t length)
 {
-	logger_log(LEVEL_DEBUG, "DBG: ");
 	for (int index = 0; index < length; index++)
 	{
-		logger_log(LEVEL_DEBUG, "0x%02x | ", *(buffer + index));
+		logger_log(LEVEL_DEBUG, "0x%02x\r\n", *(buffer + index));
 	}
-	logger_log(LEVEL_DEBUG, "\r\n");
 }

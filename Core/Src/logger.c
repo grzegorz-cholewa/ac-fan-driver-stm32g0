@@ -44,7 +44,22 @@ int logger_log(int8_t log_level, char * format, ...)
 	// create string from format and arguments
 	va_list argptr;
 	va_start(argptr, format);
-	vsnprintf(temp_buffer, strlen(format)+1, format, argptr);
+	const uint8_t log_level_len = 5;
+	switch (log_level)
+	{
+		case LEVEL_ERROR:
+			strcpy(temp_buffer, "ERR: ");
+			break;
+		case LEVEL_INFO:
+			strcpy(temp_buffer, "INF: ");
+			break;
+		case LEVEL_DEBUG:
+			strcpy(temp_buffer, "DBG: ");
+			break;
+		default:
+			;
+	}
+	vsnprintf(temp_buffer+log_level_len, strlen(format)+1, format, argptr);
 	va_end(argptr);
 
 	// put data to buffer

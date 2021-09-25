@@ -151,12 +151,12 @@ int main(void)
   HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1); // start Modbus communication
   if (status != HAL_OK)
   {
-	  logger_log(LEVEL_ERROR, "ERR: cannot start HAL_UART_Transmit_IT\r\n");
+	  logger_log(LEVEL_ERROR, "Cannot start HAL_UART_Transmit_IT\r\n");
   }
 
 //  HAL_EXTI_RegisterCallback(HAL_EXTI_RISING_CB_ID, &reset_zero_crossing_counter());
 
-  logger_log(LEVEL_INFO, "INF: Init done. App is running\r\n");
+  logger_log(LEVEL_INFO, "Init done. App is running\r\n");
 
   /* USER CODE END 2 */
 
@@ -202,7 +202,7 @@ int main(void)
 		}
 		else
 		{
-			logger_log(LEVEL_ERROR, "ERR: cannot process Modbus frame\r\n");
+			logger_log(LEVEL_ERROR, "Can't process Modbus frame\r\n");
 		}
 		update_app_data(); // update app with new data from processed Modbus frame (needed if it was write command)
 
@@ -606,14 +606,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 /* ADC conversion finished callback */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
-//	 measured ADC read time is about 300us
-	logger_log(LEVEL_DEBUG, "DBG: HAL_ADC_ConvCpltCallback\r\n");
+	logger_log(LEVEL_DEBUG, "HAL_ADC_ConvCpltCallback\r\n");
 }
 
 /* UART RX finished callback */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	logger_log(LEVEL_DEBUG, "DBG: Received 0x02x\r\n", uart_rx_byte);
+	logger_log(LEVEL_DEBUG, "Received 0x%02x\r\n", uart_rx_byte);
 
 	if (modbus_request_pending_flag == true)
 	{
@@ -629,7 +628,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		}
 		else
 		{
-			logger_log(LEVEL_ERROR, "ERR: cannot get byte to buffer (buffer full)\r\n");
+			logger_log(LEVEL_ERROR, "Cannot get byte to buffer (buffer full)\r\n");
 			modbus_frame_byte_counter = 0;
 		}
 	}
@@ -638,7 +637,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
 	if (status != HAL_OK)
 	{
-		logger_log(LEVEL_ERROR, "ERR, cannot start HAL_UART_Transmit_IT\r\n");
+		logger_log(LEVEL_ERROR, "Cannot start HAL_UART_Transmit_IT\r\n");
 	}
 }
 
@@ -659,7 +658,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 void update_working_parameters()
 {
-	logger_log(LEVEL_INFO, "INF: Updating working parameters\r\n");
+	logger_log(LEVEL_INFO, "Updating working parameters\r\n");
 	HAL_GPIO_TogglePin(GPIOB, LED_R_Pin);
 
 	// Update sensor connected status from user buttons
@@ -691,7 +690,8 @@ void update_working_parameters()
 	sensors[5].temperature = pt100_to_temperature(sensors[5].adc_value);
 
 	// log sensor data
-	logger_log(LEVEL_INFO, "SEN CH | ADC  | TEMP | USED | ERR |\r\n-------|------|------|------|-----|\r\n");
+	logger_log(LEVEL_INFO, "SEN CH | ADC  | TEMP | USED | ERR |\r\n");
+	logger_log(LEVEL_INFO, "-------|------|------|------|-----|\r\n");
 	for (int channel = 0; channel < TOTAL_SENSOR_NUMBER; channel++)
 	{
 	  logger_log(LEVEL_INFO, "   %d   | %04d | %04d |  %d   |  %d  |\r\n", channel+1, sensors[channel].adc_value, sensors[channel].temperature, (int)(sensors[channel].connected_status), sensors[channel].error);
@@ -710,7 +710,8 @@ void update_working_parameters()
 	}
 
 	// log fan channel data
-	logger_log(LEVEL_INFO, "FAN CH | MODE | SETPOINT | VOLTAGE | DELAY_US  |\r\n-------|------|----------|---------|-----------|\r\n");
+	logger_log(LEVEL_INFO, "FAN CH | MODE | SETPOINT | VOLTAGE | DELAY_US  |\r\n");
+	logger_log(LEVEL_INFO, "-------|------|----------|---------|-----------|\r\n");
 	for (int i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
 	{
 		logger_log(LEVEL_INFO, "   %01d   |  %01d   |    %02d    |   %03d   |    %d   |\r\n", i+1, channel_array[i].mode, channel_array[i].setpoint/10, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
@@ -752,7 +753,7 @@ int16_t pi_regulator(uint8_t channel, int16_t current_temp, int16_t setpoint)
 
 void update_modbus_registers(void)
 {
-	logger_log(LEVEL_INFO, "INF: Updating Modbus registers with data from app before processing request\r\n");
+	logger_log(LEVEL_INFO, "Updating Modbus registers with data from app before processing request\r\n");
 	modbus_set_reg_value(0, channel_array[0].mode);
 	modbus_set_reg_value(1, channel_array[1].mode);
 	modbus_set_reg_value(2, channel_array[2].mode);
@@ -774,7 +775,7 @@ void update_modbus_registers(void)
 
 void update_app_data(void)
 {
-	logger_log(LEVEL_INFO, "INF: Updating app data from registers\r\n");
+	logger_log(LEVEL_INFO, "Updating app data from registers\r\n");
 	channel_array[0].mode = modbus_get_reg_value(0);
 	channel_array[1].mode = modbus_get_reg_value(1);
 	channel_array[2].mode = modbus_get_reg_value(2);
