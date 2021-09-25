@@ -97,9 +97,9 @@ int16_t pt100_to_temperature(uint16_t adc_value){
 int16_t check_for_error(sensors_t * sensor_array)
 {
 	int16_t ret_val = 0;
-	for (uint8_t i = 0; i < TOTAL_SENSOR_NUMBER; i++)
+	for (int i = 0; i < TOTAL_SENSOR_NUMBER; i++)
 	{
-		int16_t temperature = sensor_array[i].temperature;
+		volatile int16_t temperature = sensor_array[i].temperature;
 		// check if sensor is set as connected and if temperature read is unexpected.
 		if ((temperature < MIN_WORKING_TEMPERATURE) || (temperature > MAX_WORKING_TEMPERATURE))
 		{
@@ -108,17 +108,13 @@ int16_t check_for_error(sensors_t * sensor_array)
 			{
 				sensor_array[i].error = 1;
 				ret_val |= 1 << i; // if error is detected on given 'i' channel, set proper bit to 1 to indicate error on that channel
+				logger_log(LEVEL_ERROR, "ERR: Temperature out of range on ch %d\r\n", i+1); // i counts from 0, sensors are counted from 1
 			}
 		}
 		else
 		{
 			sensor_array[i].error = 0;
 		}
-	}
-
-	if (ret_val != 0)
-	{
-		logger_log(LEVEL_ERROR, "ERR: unexpected sensor read\r\n");
 	}
 
 	return ret_val;

@@ -49,8 +49,8 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define WORK_STATE_MANUAL 0
-#define WORK_STATE_AUTO 1
+#define MODE_MANUAL 0
+#define MODE_AUTO 1
 
 /* USER CODE END PM */
 
@@ -79,9 +79,9 @@ uint8_t received_modbus_frame[RS_RX_BUFFER_SIZE];
 uint16_t modbus_frame_byte_counter = 0;
 
 static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
-	{GATE1_Pin, 0, WORK_STATE_MANUAL, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE},
-	{GATE2_Pin, 1, WORK_STATE_MANUAL, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE},
-	{GATE3_Pin, 2, WORK_STATE_MANUAL, INIT_CHANNEL_SETPOINT_C, 0, 0, GATE_IDLE}
+	{GATE1_Pin, 0, MODE_MANUAL, INIT_CHANNEL_SETPOINT_C, INIT_VOLTAGE, 0, GATE_IDLE},
+	{GATE2_Pin, 1, MODE_MANUAL, INIT_CHANNEL_SETPOINT_C, INIT_VOLTAGE, 0, GATE_IDLE},
+	{GATE3_Pin, 2, MODE_MANUAL, INIT_CHANNEL_SETPOINT_C, INIT_VOLTAGE, 0, GATE_IDLE}
 };
 uint8_t uart_rx_byte = 0;
 /* USER CODE END PV */
@@ -669,9 +669,8 @@ void update_working_parameters()
 //	sensors[3].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS4_sensor_connected_Pin);
 //	sensors[4].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS5_sensor_connected_Pin);
 //	sensors[5].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS6_sensor_connected_Pin);
-	sensors[3].connected_status = true; // temporary disable that
-	sensors[4].connected_status = true;
-	sensors[5].connected_status = true;
+	sensors[3].connected_status = false; // temporary disable that
+	sensors[4].connected_status = false;
 
 	// get real ADC values to sensor_values array (for non-isolated sensors)
 	for (int i = 0; i < NON_ISOLATED_SENSOR_NUMBER; i++)
@@ -690,19 +689,20 @@ void update_working_parameters()
 	sensors[3].temperature = ntc_to_temperature(sensors[3].adc_value);
 	sensors[4].temperature = ntc_to_temperature(sensors[4].adc_value);
 	sensors[5].temperature = pt100_to_temperature(sensors[5].adc_value);
-	temperature_error_state = check_for_error(sensors);
 
 	// log sensor data
 	logger_log(LEVEL_INFO, "SEN CH | ADC  | TEMP | USED | ERR |\r\n-------|------|------|------|-----|\r\n");
 	for (int channel = 0; channel < TOTAL_SENSOR_NUMBER; channel++)
 	{
-	  logger_log(LEVEL_INFO, "     %d | %04d | %04d |  %d   |  %d  |\r\n", channel+1, sensors[channel].adc_value, sensors[channel].temperature, (int)(sensors[channel].connected_status), sensors[channel].error);
+	  logger_log(LEVEL_INFO, "   %d   | %04d | %04d |  %d   |  %d  |\r\n", channel+1, sensors[channel].adc_value, sensors[channel].temperature, (int)(sensors[channel].connected_status), sensors[channel].error);
 	}
+
+	temperature_error_state = check_for_error(sensors);
 
 	// run PI regulator calculations
 	for (uint8_t i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
 	{
-		if (channel_array[i].work_state == WORK_STATE_AUTO)
+		if (channel_array[i].mode == MODE_AUTO)
 		{
 			channel_array[i].output_voltage_decpercent = pi_regulator(i, sensors[i].temperature, channel_array[i].setpoint);
 		}
@@ -710,10 +710,10 @@ void update_working_parameters()
 	}
 
 	// log fan channel data
-	logger_log(LEVEL_INFO, "FAN CH | SETPOINT | VOLTAGE | DELAY_US |\r\n-------|----------|---------|----------|\r\n");
+	logger_log(LEVEL_INFO, "FAN CH | MODE | SETPOINT | VOLTAGE | DELAY_US  |\r\n-------|------|----------|---------|-----------|\r\n");
 	for (int i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
 	{
-		logger_log(LEVEL_INFO, "   %d   |    %02d    |   %03d   |    %d   |\r\n", i+1, channel_array[i].setpoint/10, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
+		logger_log(LEVEL_INFO, "   %01d   |  %01d   |    %02d    |   %03d   |    %d   |\r\n", i+1, channel_array[i].mode, channel_array[i].setpoint/10, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
 	}
 	update_working_parameters_pending_flag = false;
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER); // start ADC read for next update cycle
@@ -753,9 +753,9 @@ int16_t pi_regulator(uint8_t channel, int16_t current_temp, int16_t setpoint)
 void update_modbus_registers(void)
 {
 	logger_log(LEVEL_INFO, "INF: Updating Modbus registers with data from app before processing request\r\n");
-	modbus_set_reg_value(0, channel_array[0].work_state);
-	modbus_set_reg_value(1, channel_array[1].work_state);
-	modbus_set_reg_value(2, channel_array[2].work_state);
+	modbus_set_reg_value(0, channel_array[0].mode);
+	modbus_set_reg_value(1, channel_array[1].mode);
+	modbus_set_reg_value(2, channel_array[2].mode);
 	modbus_set_reg_value(3, channel_array[0].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
 	modbus_set_reg_value(4, channel_array[1].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
 	modbus_set_reg_value(5, channel_array[2].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
@@ -775,43 +775,43 @@ void update_modbus_registers(void)
 void update_app_data(void)
 {
 	logger_log(LEVEL_INFO, "INF: Updating app data from registers\r\n");
-	channel_array[0].work_state = modbus_get_reg_value(0);
-	channel_array[1].work_state = modbus_get_reg_value(1);
-	channel_array[2].work_state = modbus_get_reg_value(2);
+	channel_array[0].mode = modbus_get_reg_value(0);
+	channel_array[1].mode = modbus_get_reg_value(1);
+	channel_array[2].mode = modbus_get_reg_value(2);
 
 	if ((modbus_get_reg_value(3)) != channel_array[0].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
 	{
-		channel_array[0].work_state = WORK_STATE_MANUAL;
+		channel_array[0].mode = MODE_MANUAL;
 		channel_array[0].output_voltage_decpercent = modbus_get_reg_value(3)*VOLTAGE_PRECISION_MULTIPLIER;
 	}
 
 	if (modbus_get_reg_value(4) != channel_array[1].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
 	{
-		channel_array[1].work_state = WORK_STATE_MANUAL;
+		channel_array[1].mode = MODE_MANUAL;
 		channel_array[1].output_voltage_decpercent = modbus_get_reg_value(4)*VOLTAGE_PRECISION_MULTIPLIER;
 	}
 
 	if (modbus_get_reg_value(5) != channel_array[2].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
 	{
-		channel_array[2].work_state = WORK_STATE_MANUAL;
+		channel_array[2].mode = MODE_MANUAL;
 		channel_array[2].output_voltage_decpercent = modbus_get_reg_value(5)*VOLTAGE_PRECISION_MULTIPLIER;
 	}
 
 	if (modbus_get_reg_value(6) != (channel_array[0].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
 	{
-		channel_array[0].work_state = WORK_STATE_AUTO;
+		channel_array[0].mode = MODE_AUTO;
 		channel_array[0].setpoint = modbus_get_reg_value(6)*TEMPERATURE_PRECISION_MULTIPLIER;
 	}
 
 	if (modbus_get_reg_value(7) != (channel_array[1].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
 	{
-		channel_array[1].work_state = WORK_STATE_AUTO;
+		channel_array[1].mode = MODE_AUTO;
 		channel_array[1].setpoint = modbus_get_reg_value(7)*TEMPERATURE_PRECISION_MULTIPLIER;
 	}
 
 	if (modbus_get_reg_value(8) != (channel_array[2].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
 	{
-		channel_array[2].work_state = WORK_STATE_AUTO;
+		channel_array[2].mode = MODE_AUTO;
 		channel_array[2].setpoint = modbus_get_reg_value(8)*TEMPERATURE_PRECISION_MULTIPLIER;
 	}
 }
