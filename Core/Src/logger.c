@@ -14,21 +14,45 @@
 UART_HandleTypeDef * huart;
 cbuf_handle_t cbuf;
 bool transmitting_now = false;
-enum log_level_type level = LEVEL_INFO; // default logging level
+enum log_level_type level; // default logging level
 uint8_t buffer[buffer_size];
 uint8_t transmit_buffer;
 
 uint8_t get_level();
-void transmit_byte();
+void transmit_next_byte();
 
 
-void logger_init(UART_HandleTypeDef * huartPointer, int8_t level_to_set)
+void logger_init(UART_HandleTypeDef * huartPointer)
 {
 	huart = huartPointer;
-	level = level_to_set;
+	level = LEVEL_INFO; // default level
 	cbuf = circular_buf_init(buffer, buffer_size);
 
 	logger_log(LEVEL_INFO, "Logger init complete\r\n");
+}
+
+
+void logger_set_level(uint8_t level_to_set)
+{
+	if (level_to_set == LEVEL_ERROR)
+	{
+		logger_log(LEVEL_INFO, "Logging level set to ERROR\r\n");
+		level = LEVEL_ERROR;
+	}
+	else if (level_to_set == LEVEL_INFO)
+	{
+		level = LEVEL_INFO;
+		logger_log(LEVEL_INFO, "Logging level set to INFO\r\n");
+	}
+	else if (level_to_set == LEVEL_DEBUG)
+	{
+		logger_log(LEVEL_INFO, "Logging level set to DEBUG\r\n");
+		level = LEVEL_DEBUG;
+	}
+	else
+	{
+		logger_log(LEVEL_INFO, "Wrong logging level. Setting to default (INFO)\r\n");
+	}
 }
 
 
@@ -68,7 +92,7 @@ int logger_log(int8_t log_level, char * format, ...)
 		circular_buf_put2(cbuf, temp_buffer[byte_count]);
 	}
 
-	transmit_byte();
+	transmit_next_byte();
 
 	return 0;
 }
@@ -77,7 +101,7 @@ int logger_log(int8_t log_level, char * format, ...)
 void logger_transmit_complete()
 {
 	transmitting_now = false;
-	transmit_byte();
+	transmit_next_byte();
 }
 
 
@@ -87,7 +111,7 @@ uint8_t get_level()
 }
 
 
-void transmit_byte()
+void transmit_next_byte()
 {
 	// read from buffer if there is something to read
 	if (transmitting_now)

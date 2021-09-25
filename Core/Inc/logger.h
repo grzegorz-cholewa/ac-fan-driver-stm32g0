@@ -14,27 +14,28 @@
 enum log_level_type {LEVEL_ERROR = 0, LEVEL_INFO = 1, LEVEL_DEBUG = 2};
 
 /**
+ * Inits logger.
+ * @param huartPointer: pointer to UART handle
+ */
+void logger_init(UART_HandleTypeDef * huartPointer);
+
+/**
  * Sets logger level
  * @param level_to_set: level of logging, must be of from 'log_level_type'
  */
-void logger_init(UART_HandleTypeDef * huartPointer, int8_t level_to_set);
+void logger_set_level(uint8_t level);
 
 /**
- * Log stream to using USB CDC
- * @param log_level: logging level
- * @param format: formatted string
+ * Log stream. This is non-blocking.
+ * It stores passed data in its own buffer, so the buffer that is passed don't have to exist after making a call.
+ * @param log_level
+ * @param format: formatted string, similar to what prinf takes
  * @return 0 if success, non-zero otherwise
  */
 int logger_log(int8_t log_level, char * format, ...);
 
-/**
-//TODO add description
- *
- */
-void transmit_byte();
 
 /**
-//TODO add description
- *
+ * It must be called by callback from previous byte transmitted.
  */
 void logger_transmit_complete();

@@ -83,7 +83,8 @@ static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
 	{GATE2_Pin, 1, MODE_MANUAL, INIT_CHANNEL_SETPOINT_C, INIT_VOLTAGE, 0, GATE_IDLE},
 	{GATE3_Pin, 2, MODE_MANUAL, INIT_CHANNEL_SETPOINT_C, INIT_VOLTAGE, 0, GATE_IDLE}
 };
-uint8_t uart_rx_byte = 0;
+uint8_t uart1_rx_byte = 0;
+uint8_t uart2_rx_byte = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -142,16 +143,22 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  logger_init(&huart1, LEVEL_INFO);
+  logger_init(&huart1);
+  logger_set_level(LEVEL_DEBUG);
 
   HAL_TIM_Base_Start_IT(&htim3);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER);
   rs485_init(&huart2);
   update_working_parameters();
-  HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1); // start Modbus communication
+  HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1); // start debug UART receiving
   if (status != HAL_OK)
   {
-	  logger_log(LEVEL_ERROR, "Cannot start HAL_UART_Transmit_IT\r\n");
+	  logger_log(LEVEL_ERROR, "Cannot start huart1 receiving\r\n");
+  }
+  status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1); // start Modbus UART receiving
+  if (status != HAL_OK)
+  {
+	  logger_log(LEVEL_ERROR, "Cannot start huart1 receiving\r\n");
   }
 
 //  HAL_EXTI_RegisterCallback(HAL_EXTI_RISING_CB_ID, &reset_zero_crossing_counter());
@@ -162,27 +169,9 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-//  while (1) // test loop
-//  {
-//	  HAL_Delay (1000);
-//	  HAL_GPIO_TogglePin (GPIOB, LED_R_Pin);
-//	  log_text(LEVEL_INFO, "Test loop running\r\n");
-//
-//	  log_text(LEVEL_INFO, "ABCDEF\r\n");
-//	  log_text(LEVEL_INFO, "12345\r\n");
-//
-////	  char string_buffer1[] = "ABCDEF\r\n";
-////	  char string_buffer2[] = "12345\r\n";
-////	  HAL_UART_Transmit(&huart1, (uint8_t*)string_buffer1, strlen(string_buffer1), 1000);
-////	  HAL_UART_Transmit(&huart1, (uint8_t*)string_buffer2, strlen(string_buffer2), 1000);
-//
-////	  int8_t buffer[] = "12345ABCDEF";
-////	  rs485_transmit_byte_array(buffer, 10);
-//  }
+
   while (1)
   {
-//	logger_transmit_byte();
-
 	// Modbus request can be waiting if update_working_parameters() is running. Could it be a problem?
 	// Probably no, as a measured execution time of update_working_parameters() execution is around 1ms.
 	if (update_working_parameters_pending_flag == true)
@@ -606,39 +595,58 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 /* ADC conversion finished callback */
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
-	logger_log(LEVEL_DEBUG, "HAL_ADC_ConvCpltCallback\r\n");
+//	logger_log(LEVEL_DEBUG, "HAL_ADC_ConvCpltCallback\r\n");
 }
 
 /* UART RX finished callback */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	logger_log(LEVEL_DEBUG, "Received 0x%02x\r\n", uart_rx_byte);
-
-	if (modbus_request_pending_flag == true)
+	if (huart->Instance == USART1)
 	{
-		return;
-	}
-	else
-	{
-		rx_time_interval_counter = 0;
+		// debug UART received byte
+		logger_log(LEVEL_DEBUG, "UART1 received 0x%02x\r\n", uart1_rx_byte);
+		logger_set_level((uint8_t)uart1_rx_byte-'0');
 
-		if (rs485_collect_byte_to_buffer(&uart_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
+		// Prepare for next byte receiving
+		HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+		if (status != HAL_OK)
 		{
-			modbus_frame_byte_counter++;
-		}
-		else
-		{
-			logger_log(LEVEL_ERROR, "Cannot get byte to buffer (buffer full)\r\n");
-			modbus_frame_byte_counter = 0;
+			logger_log(LEVEL_ERROR, "Cannot start huart1 receiving\r\n");
 		}
 	}
-
-	// Prepare for next byte receiving
-	HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart_rx_byte, 1);
-	if (status != HAL_OK)
+	if (huart->Instance == USART2)
 	{
-		logger_log(LEVEL_ERROR, "Cannot start HAL_UART_Transmit_IT\r\n");
+		// Modbus UART received byte
+		logger_log(LEVEL_DEBUG, "UART2 received 0x%02x\r\n", uart2_rx_byte);
+
+			if (modbus_request_pending_flag == true)
+			{
+				return;
+			}
+			else
+			{
+				rx_time_interval_counter = 0;
+
+				if (rs485_collect_byte_to_buffer(&uart2_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
+				{
+					modbus_frame_byte_counter++;
+				}
+				else
+				{
+					logger_log(LEVEL_ERROR, "Cannot get byte to buffer (buffer full)\r\n");
+					modbus_frame_byte_counter = 0;
+				}
+			}
+
+			// Prepare for next byte receiving
+			HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
+			if (status != HAL_OK)
+			{
+				logger_log(LEVEL_ERROR, "Cannot start huart2 receiving\r\n");
+			}
 	}
+
+
 }
 
 /* UART TX finished callback */
@@ -648,7 +656,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 	{
 		// debug uart transmit complete
 		logger_transmit_complete();
-//		HAL_UART_Transmit_IT(&huart1, str, 6);
 	}
 	if (huart->Instance == USART2)
 	{
