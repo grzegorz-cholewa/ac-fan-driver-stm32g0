@@ -663,6 +663,15 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 	}
 }
 
+
+void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
+{
+  /* Prevent unused argument(s) compilation warning */
+  UNUSED(GPIO_Pin);
+  reset_zero_crossing_counter();
+}
+
+
 void update_working_parameters()
 {
 	logger_log(LEVEL_INFO, "Updating working parameters\r\n");
