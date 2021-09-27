@@ -9,21 +9,22 @@
 // logger_set_level(LEVEL_ERROR); // set log level first
 // log_text(LEVEL_ERROR, "Error code: %d\r\n", err_code);
 
-#include "stm32g0xx_hal.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 enum log_level_type {LEVEL_ERROR = 0, LEVEL_INFO = 1, LEVEL_DEBUG = 2};
 
 /**
  * Inits logger.
- * @param huartPointer: pointer to UART handle
+ * @param transmit_byte_callback: pointer to method for sending a byte
  */
-void logger_init(UART_HandleTypeDef * huartPointer);
+void logger_init(bool (*transmit_byte_callback)(uint8_t *));
 
 /**
  * Sets logger level
  * @param level_to_set: level of logging, must be of from 'log_level_type'
  */
-void logger_set_level(uint8_t level);
+void logger_set_level(int level);
 
 /**
  * Log stream. This is non-blocking.
@@ -32,10 +33,10 @@ void logger_set_level(uint8_t level);
  * @param format: formatted string, similar to what prinf takes
  * @return 0 if success, non-zero otherwise
  */
-int logger_log(int8_t log_level, char * format, ...);
+int logger_log(int log_level, char * format, ...);
 
 
 /**
  * It must be called by callback from previous byte transmitted.
  */
-void logger_transmit_complete();
+void logger_transmit_complete(void);

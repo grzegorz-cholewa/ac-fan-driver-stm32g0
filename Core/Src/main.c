@@ -101,6 +101,7 @@ void update_working_parameters(void);
 void update_modbus_registers(void);
 void update_app_data(void);
 void reset_zero_crossing_counter(void);
+bool uart1_transmit_byte(uint8_t * byte);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -143,7 +144,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  logger_init(&huart1);
+  logger_init(&uart1_transmit_byte);
   logger_set_level(LEVEL_DEBUG);
   rs485_init(&huart2);
   status = HAL_TIM_Base_Start_IT(&htim3);
@@ -845,6 +846,19 @@ void reset_zero_crossing_counter(void)
 	if (gate_pulse_delay_counter_us > HALF_SINE_PERIOD_US - 500)
 	{
 		gate_pulse_delay_counter_us = 0;
+	}
+}
+
+bool uart1_transmit_byte(uint8_t * byte)
+{
+	HAL_StatusTypeDef retVal = HAL_UART_Transmit_IT(&huart1, (uint8_t*)byte, 1);
+	if (retVal == HAL_OK)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
 	}
 }
 /* USER CODE END 4 */

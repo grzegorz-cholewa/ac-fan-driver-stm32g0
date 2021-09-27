@@ -4,35 +4,35 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 #include <buffer.h>
 
 #define buffer_size (1000)
 #define max_string_size (100)
 
-
-UART_HandleTypeDef * huart;
+/* Global variables */
+enum log_level_type level;
 cbuf_handle_t cbuf;
-bool transmitting_now = false;
-enum log_level_type level; // default logging level
+bool transmitting_now;
 uint8_t buffer[buffer_size];
 uint8_t transmit_buffer;
+bool (*transmit_byte_method)(uint8_t *);
 
+/* Static methods */
 uint8_t get_level();
 void transmit_next_byte();
 
 
-void logger_init(UART_HandleTypeDef * huartPointer)
+void logger_init(bool (*transmit_byte_callback)(uint8_t *))
 {
-	huart = huartPointer;
+	transmit_byte_method = transmit_byte_callback;
 	level = LEVEL_INFO; // default level
+	transmitting_now = false;
 	cbuf = circular_buf_init(buffer, buffer_size);
-
 	logger_log(LEVEL_INFO, "Logger init complete\r\n");
 }
 
 
-void logger_set_level(uint8_t level_to_set)
+void logger_set_level(int level_to_set)
 {
 	if (level_to_set == LEVEL_ERROR)
 	{
@@ -56,7 +56,7 @@ void logger_set_level(uint8_t level_to_set)
 }
 
 
-int logger_log(int8_t log_level, char * format, ...)
+int logger_log(int log_level, char * format, ...)
 {
 	if (get_level() < log_level)
 	{
@@ -121,8 +121,8 @@ void transmit_next_byte()
 	if(!circular_buf_empty(cbuf))
 	{
 		circular_buf_get(cbuf, &transmit_buffer);
-		HAL_StatusTypeDef retVal = HAL_UART_Transmit_IT(huart, &transmit_buffer, 1);
-		if (retVal == HAL_OK)
+		bool success = transmit_byte_method(&transmit_buffer);
+		if (success)
 		{
 			transmitting_now = true;
 		}
