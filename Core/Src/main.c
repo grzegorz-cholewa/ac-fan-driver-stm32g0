@@ -115,6 +115,7 @@ void reset_zero_crossing_counter(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	HAL_StatusTypeDef status;
 
   /* USER CODE END 1 */
 
@@ -142,28 +143,44 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-
   logger_init(&huart1);
   logger_set_level(LEVEL_DEBUG);
-
-  HAL_TIM_Base_Start_IT(&htim3);
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER);
   rs485_init(&huart2);
+  status = HAL_TIM_Base_Start_IT(&htim3);
+  if (status != HAL_OK)
+  {
+	  logger_log(LEVEL_ERROR, "Cannot start timer\r\n");
+  }
+  status = HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER);
+  if (status != HAL_OK)
+  {
+	  logger_log(LEVEL_ERROR, "Cannot start ADC DMA\r\n");
+  }
+  status = HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+  if (status != HAL_OK)
+  {
+	  logger_log(LEVEL_ERROR, "Cannot start UART1 receiving\r\n");
+  }
+  status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
+  if (status != HAL_OK)
+  {
+	  logger_log(LEVEL_ERROR, "Cannot start UART2 receiving\r\n");
+  }
+
+  // Init sensor connected status
+  sensors[0].connected_status = true; // always connected internally
+  sensors[1].connected_status = true; // always connected internally
+  sensors[2].connected_status = true; // always connected internally
+//  sensors[3].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS4_sensor_connected_Pin);
+//	sensors[4].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS5_sensor_connected_Pin);
+//	sensors[5].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS6_sensor_connected_Pin);
+  sensors[3].connected_status = false; // temporary
+  sensors[4].connected_status = false; // temporary
+  sensors[5].connected_status = false; // temporary
+
   update_working_parameters();
-  HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1); // start debug UART receiving
-  if (status != HAL_OK)
-  {
-	  logger_log(LEVEL_ERROR, "Cannot start huart1 receiving\r\n");
-  }
-  status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1); // start Modbus UART receiving
-  if (status != HAL_OK)
-  {
-	  logger_log(LEVEL_ERROR, "Cannot start huart1 receiving\r\n");
-  }
 
-//  HAL_EXTI_RegisterCallback(HAL_EXTI_RISING_CB_ID, &reset_zero_crossing_counter());
-
-  logger_log(LEVEL_INFO, "Init done. App is running\r\n");
+  logger_log(LEVEL_INFO, "App init done\r\n");
 
   /* USER CODE END 2 */
 
@@ -173,7 +190,7 @@ int main(void)
   while (1)
   {
 	// Modbus request can be waiting if update_working_parameters() is running. Could it be a problem?
-	// Probably no, as a measured execution time of update_working_parameters() execution is around 1ms.
+	// Probably no, as a measured execution time of update_working_parameters() is around 1ms.
 	if (update_working_parameters_pending_flag == true)
 	{
 		update_working_parameters();
@@ -676,16 +693,6 @@ void update_working_parameters()
 {
 	logger_log(LEVEL_INFO, "Updating working parameters\r\n");
 	HAL_GPIO_TogglePin(GPIOB, LED_R_Pin);
-
-	// Update sensor connected status from user buttons
-	sensors[0].connected_status = true; // always connected internally
-	sensors[1].connected_status = true; // always connected internally
-	sensors[2].connected_status = true; // always connected internally
-//	sensors[3].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS4_sensor_connected_Pin);
-//	sensors[4].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS5_sensor_connected_Pin);
-//	sensors[5].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS6_sensor_connected_Pin);
-	sensors[3].connected_status = false; // temporary disable that
-	sensors[4].connected_status = false;
 
 	// get real ADC values to sensor_values array (for non-isolated sensors)
 	for (int i = 0; i < NON_ISOLATED_SENSOR_NUMBER; i++)

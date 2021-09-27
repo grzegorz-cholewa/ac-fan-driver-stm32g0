@@ -86,12 +86,12 @@ int16_t ntc_to_temperature(uint16_t adc_value)
 	{
 		return -999; // TODO: solve this better way
 	}
-};
+}
 
 int16_t pt100_to_temperature(uint16_t adc_value){
 //	return PTC_table[adc_value];
 	 return 0; // TODO get real values
-};
+}
 
 
 int16_t check_for_error(sensors_t * sensor_array)
