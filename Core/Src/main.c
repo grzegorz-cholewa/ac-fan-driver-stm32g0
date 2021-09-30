@@ -517,7 +517,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, SPI_EN_Pin|LED_R_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, GATE1_Pin|GATE2_Pin|GATE3_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOD, GATE1_Pin|GATE2_Pin|GATE3_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pins : TS4_EN_Pin TS5_EN_Pin TS6_EN_Pin */
   GPIO_InitStruct.Pin = TS4_EN_Pin|TS5_EN_Pin|TS6_EN_Pin;
