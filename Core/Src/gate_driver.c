@@ -5,6 +5,7 @@
 
 #include <gate_driver.h>
 #include <math.h>
+#include "main.h"
 
 
 void drive_fans(channel_t * channel_array, uint8_t array_size, uint32_t gate_pulse_delay_counter_us)
@@ -66,11 +67,11 @@ void set_gate_state(channel_t * fan, gate_state_t pulse_state)
 
 	if (pulse_state == GATE_ACTIVE)
 	{
-		HAL_GPIO_WritePin(GPIOC, fan->gate_pin, GPIO_PIN_RESET); // optotransistor is active low
+		HAL_GPIO_WritePin(GATE1_GPIO_Port, fan->gate_pin, GPIO_PIN_RESET); // optotransistor is active low
 	}
 
 	if (pulse_state != GATE_ACTIVE)
 	{
-		HAL_GPIO_WritePin(GPIOC, fan->gate_pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GATE1_GPIO_Port, fan->gate_pin, GPIO_PIN_SET);
 	}
 }

@@ -22,7 +22,7 @@ void logger_init(bool (*transmit_byte_callback)(uint8_t *));
 
 /**
  * Sets logger level
- * @param level_to_set: level of logging, must be of from 'log_level_type'
+ * @param level_to_set: level of logging, as definen by log_level_type
  */
 void logger_set_level(int level);
 
