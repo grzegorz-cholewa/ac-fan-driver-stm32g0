@@ -52,7 +52,7 @@ uint32_t get_gate_delay_us(uint16_t output_voltage_percent)
 	if (gate_delay < MIN_GATE_DELAY_US)
 		gate_delay = MIN_GATE_DELAY_US;
 
-	return gate_delay - ZERO_CROSSING_DETECTION_OFFSET_US;
+	return gate_delay;
 }
 
 

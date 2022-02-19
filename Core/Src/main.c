@@ -845,7 +845,7 @@ void reset_zero_crossing_counter(void)
 {
 	if (gate_pulse_delay_counter_us > HALF_SINE_PERIOD_US - 500)
 	{
-		gate_pulse_delay_counter_us = 0;
+		gate_pulse_delay_counter_us = ZERO_CROSSING_DETECTION_OFFSET_US;
 	}
 }
 
