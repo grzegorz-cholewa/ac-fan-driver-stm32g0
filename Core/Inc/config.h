@@ -9,7 +9,7 @@
 #define OUTPUT_CHANNELS_NUMBER 3
 
 /* WORKING PARAMETERS */
-#define MAIN_TIMER_RESOLUTION_US 100
+#define MAIN_TIMER_RESOLUTION_US 100 // TIM3 is configured to interrupt every 0.0001s that is 100us, so that value corresponds to it. Don't change without reconfiguring timer.
 #define GATE_PULSE_MIN_TIME_US 100
 #define MIN_WORKING_TEMPERATURE 0*TEMPERATURE_PRECISION_MULTIPLIER // exceeding this value results in error alert
 #define MAX_WORKING_TEMPERATURE 90*TEMPERATURE_PRECISION_MULTIPLIER // exceeding this value results in error alert
@@ -23,6 +23,7 @@
 
 /* PI PARAMETERS */
 #define WORKING_PARAMETERS_UPDATE_PERIOD_US 1000000 // this is also a period of triggering PI regulator
+#define LOG_PARAMETERS_UPDATE_PERIOD_US 5000000 // this is also a period logging params to serial console
 #define INIT_CHANNEL_SETPOINT_C (0*TEMPERATURE_PRECISION_MULTIPLIER)
 #define INIT_VOLTAGE (0 * VOLTAGE_PRECISION_MULTIPLIER)
 #define PI_KP 5
