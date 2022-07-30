@@ -794,6 +794,8 @@ void update_working_params()
 		sensors[i].adc_value = dma_adc_array[i];
 	}
 	// get ADC values to sensor_values array (for isolated sensors)
+	// temporary workaround is to send only one request to SPI IC as there is a problem with handling multiple requests
+	// therefore one sensor is updated instead of all of them at once
 	static int shift = 0;
 	sensors[3+shift].adc_value = read_isolated_sensor(shift);
 	if (shift == 2)
@@ -980,8 +982,6 @@ int read_isolated_sensor(int sensor_no)
 	}
 
 	spi_transmit_control(false);
-
-	//delay_us(8);
 
 	// receive response
 	for (int i=0; i<3; i++)
