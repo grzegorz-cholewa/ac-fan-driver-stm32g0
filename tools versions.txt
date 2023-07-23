@@ -1,2 +1,0 @@
-STM32CubeMX 6.2.1
-System WorkBench for STM32 2.8.0
