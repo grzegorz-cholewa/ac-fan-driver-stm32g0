@@ -67,11 +67,11 @@ void set_gate_state(channel_t * fan, gate_state_t pulse_state)
 
 	if (pulse_state == GATE_ACTIVE)
 	{
-		HAL_GPIO_WritePin(GATE1_GPIO_Port, fan->gate_pin, GPIO_PIN_RESET); // optotransistor is active low
+		HAL_GPIO_WritePin(fan->gate_port, fan->gate_pin, GPIO_PIN_RESET); // optotransistor is active low
 	}
 
 	if (pulse_state != GATE_ACTIVE)
 	{
-		HAL_GPIO_WritePin(GATE1_GPIO_Port, fan->gate_pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(fan->gate_port, fan->gate_pin, GPIO_PIN_SET);
 	}
 }

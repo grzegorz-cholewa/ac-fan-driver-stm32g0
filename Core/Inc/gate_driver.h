@@ -19,9 +19,7 @@ typedef enum
 typedef struct
 {
 	uint32_t gate_pin;
-	const uint8_t temp_sensor_index;
-	uint8_t mode;
-	int16_t setpoint;
+	GPIO_TypeDef * gate_port;
 	int16_t output_voltage_decpercent;
 	uint32_t activation_delay_us; // time from zero-crossing to gate activation
 	gate_state_t state;

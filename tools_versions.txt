@@ -1,2 +1,2 @@
-STM32CubeMX 6.2.1
-SW4STM32 System WorkBench for STM32 2.8.0
+STM32CubeMX 6.9.0
+STM32CubeIDE 1.13.0

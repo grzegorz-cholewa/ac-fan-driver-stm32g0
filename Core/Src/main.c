@@ -6,20 +6,14 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2021 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2023 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
-  Project was setup with CubeMX 6.2.1
-  It works under System Workbench for STM32 environment
-
-  USART1 is for debug logging (115200bits/s)
-  USART2 is for Modbus communication (9600bits/s)
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
@@ -35,8 +29,7 @@
 #include <modbus.h>
 #include <gate_driver.h>
 #include <logger.h>
-#include <sensor.h>
-#include <si8902.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,74 +39,54 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define MODE_MANUAL 0
-#define MODE_AUTO 1
 
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-ADC_HandleTypeDef hadc1;
-DMA_HandleTypeDef hdma_adc1;
-
-SPI_HandleTypeDef hspi2;
-
-TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
 /* Flags */
-bool update_working_parameters_pending_flag = false;
-bool log_working_parameters_pending_flag = false;
 bool modbus_request_pending_flag = false;
 
 /* Global variables */
 uint32_t gate_pulse_delay_counter_us = 0;
-uint32_t update_parameter_counter_us = 0;
-uint32_t log_parameters_counter_us = 0;
+uint32_t log_counter_us = 0;
 uint32_t rx_time_interval_counter = 0;
-sensors_t sensors[TOTAL_SENSOR_NUMBER];
-uint16_t dma_adc_array[NON_ISOLATED_SENSOR_NUMBER];
-int16_t temperature_error_state = 0;
 uint8_t received_modbus_frame[RS_RX_BUFFER_SIZE];
 uint16_t modbus_frame_byte_counter = 0;
-
-static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
-	{GATE1_Pin, 0, MODE_MANUAL, INIT_CHANNEL_SETPOINT_C, INIT_VOLTAGE, 0, GATE_IDLE},
-	{GATE2_Pin, 1, MODE_MANUAL, INIT_CHANNEL_SETPOINT_C, INIT_VOLTAGE, 0, GATE_IDLE},
-	{GATE3_Pin, 2, MODE_MANUAL, INIT_CHANNEL_SETPOINT_C, INIT_VOLTAGE, 0, GATE_IDLE}
-};
 uint8_t uart1_rx_byte = 0;
 uint8_t uart2_rx_byte = 0;
+
+static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
+	{TRIG1_Pin, TRIG1_GPIO_Port,  INIT_VOLTAGE, 0, GATE_IDLE},
+	{TRIG2_Pin, TRIG2_GPIO_Port, INIT_VOLTAGE, 0, GATE_IDLE},
+};
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_ADC1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM3_Init(void);
-static void MX_SPI2_Init(void);
-static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
-int16_t pi_regulator(uint8_t channel, int16_t current_temp, int16_t target_temperature);
-void update_working_params(void);
-void log_working_params(void);
-void update_modbus_registers(void);
+
+void log_working_parameters(void);
 void update_app_data(void);
 void reset_zero_crossing_counter(void);
-bool uart1_transmit_byte(uint8_t * byte);
-int read_isolated_sensor(int sensor_no);
-void spi_transmit_control(bool enable);
-void delay_us (uint16_t us);
+bool logger_transmit_byte(uint8_t * byte);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -128,7 +101,7 @@ void delay_us (uint16_t us);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-	HAL_StatusTypeDef status;
+  HAL_StatusTypeDef status;
 
   /* USER CODE END 1 */
 
@@ -150,82 +123,42 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_ADC1_Init();
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   MX_TIM3_Init();
-  MX_SPI2_Init();
-  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  logger_init(&uart1_transmit_byte);
+  logger_init(&logger_transmit_byte);
   logger_set_level(LEVEL_INFO);
   rs485_init(&huart2);
-  status = HAL_TIM_Base_Start(&htim1);
-  if (status != HAL_OK)
-  {
-	  logger_log(LEVEL_ERROR, "Cannot start timer TIM1\r\n");
-  }
   status = HAL_TIM_Base_Start_IT(&htim3);
   if (status != HAL_OK)
-  {
-	  logger_log(LEVEL_ERROR, "Cannot start timer TIM3\r\n");
-  }
-  status = HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER);
-  if (status != HAL_OK)
-  {
-	  logger_log(LEVEL_ERROR, "Cannot start ADC DMA\r\n");
-  }
-  status = HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
-  if (status != HAL_OK)
-  {
-	  logger_log(LEVEL_ERROR, "Cannot start UART1 receiving\r\n");
-  }
-  status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
-  if (status != HAL_OK)
-  {
-	  logger_log(LEVEL_ERROR, "Cannot start UART2 receiving\r\n");
-  }
+    {
+  	  logger_log(LEVEL_ERROR, "Cannot start timer\r\n");
+    }
+    status = HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+    if (status != HAL_OK)
+    {
+  	  logger_log(LEVEL_ERROR, "Cannot start UART1 receiving\r\n");
+    }
+    status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
+    if (status != HAL_OK)
+    {
+  	  logger_log(LEVEL_ERROR, "Cannot start UART2 receiving\r\n");
+    }
 
-  // Init sensor connected status
-  sensors[0].connected_status = true; // always connected internally
-  sensors[1].connected_status = true; // always connected internally
-  sensors[2].connected_status = true; // always connected internally
-//  sensors[3].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS4_sensor_connected_Pin);
-//	sensors[4].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS5_sensor_connected_Pin);
-//	sensors[5].connected_status = (bool)HAL_GPIO_ReadPin(GPIOD, TS6_sensor_connected_Pin);
-  sensors[3].connected_status = false; // temporary
-  sensors[4].connected_status = false; // temporary
-  sensors[5].connected_status = false; // temporary
-
-  update_working_params();
-
-  logger_log(LEVEL_INFO, "App init done\r\n");
+    logger_log(LEVEL_INFO, "App init done\r\n");
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
   while (1)
   {
-	// Modbus request can be waiting if update_working_parameters() is running. Could it be a problem?
-	// Probably no, as a measured execution time of update_working_parameters() is around 1ms.
-	if (update_working_parameters_pending_flag == true)
-	{
-		update_working_params();
-	}
-
-	if (log_working_parameters_pending_flag == true)
-	{
-		log_working_params();
-	}
 
 	if (modbus_request_pending_flag == true)
 	{
 		uint8_t response_buffer[RS_TX_BUFFER_SIZE];
 		uint16_t response_size;
-		update_modbus_registers(); // update Modbus registers with data from app
 		if (modbus_process_frame(received_modbus_frame, modbus_frame_byte_counter, response_buffer, &response_size))
 		{
 			rs485_transmit_byte_array(response_buffer, response_size);
@@ -239,7 +172,7 @@ int main(void)
 		modbus_request_pending_flag = false;
 		modbus_frame_byte_counter = 0;
 		memset(received_modbus_frame, 0, sizeof(received_modbus_frame)); // clear buffer
-	}
+		}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -255,11 +188,11 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Configure the main internal regulator output voltage
   */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
+
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
@@ -277,6 +210,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -289,175 +223,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Initializes the peripherals clocks
-  */
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_ADC;
-  PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK1;
-  PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_SYSCLK;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
-  * @brief ADC1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ADC1_Init(void)
-{
-
-  /* USER CODE BEGIN ADC1_Init 0 */
-
-  /* USER CODE END ADC1_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC1_Init 1 */
-
-  /* USER CODE END ADC1_Init 1 */
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
-  */
-  hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
-  hadc1.Init.Resolution = ADC_RESOLUTION_10B;
-  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
-  hadc1.Init.LowPowerAutoWait = DISABLE;
-  hadc1.Init.LowPowerAutoPowerOff = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 3;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.DMAContinuousRequests = ENABLE;
-  hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_39CYCLES_5;
-  hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_1CYCLE_5;
-  hadc1.Init.OversamplingMode = DISABLE;
-  hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_LOW;
-  if (HAL_ADC_Init(&hadc1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_5;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLINGTIME_COMMON_1;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_6;
-  sConfig.Rank = ADC_REGULAR_RANK_2;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_7;
-  sConfig.Rank = ADC_REGULAR_RANK_3;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC1_Init 2 */
-
-  /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief SPI2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI2_Init(void)
-{
-
-  /* USER CODE BEGIN SPI2_Init 0 */
-
-  /* USER CODE END SPI2_Init 0 */
-
-  /* USER CODE BEGIN SPI2_Init 1 */
-
-  /* USER CODE END SPI2_Init 1 */
-  /* SPI2 parameter configuration*/
-  hspi2.Instance = SPI2;
-  hspi2.Init.Mode = SPI_MODE_MASTER;
-  hspi2.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi2.Init.CLKPolarity = SPI_POLARITY_HIGH;
-  hspi2.Init.CLKPhase = SPI_PHASE_2EDGE;
-  hspi2.Init.NSS = SPI_NSS_SOFT;
-  hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
-  hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi2.Init.CRCPolynomial = 7;
-  hspi2.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi2.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
-  if (HAL_SPI_Init(&hspi2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI2_Init 2 */
-  spi_transmit_control(false);
-  /* USER CODE END SPI2_Init 2 */
-
-}
-
-/**
-  * @brief TIM1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM1_Init(void)
-{
-
-  /* USER CODE BEGIN TIM1_Init 0 */
-
-  /* USER CODE END TIM1_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM1_Init 1 */
-
-  /* USER CODE END TIM1_Init 1 */
-  htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 64-1;
-  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535;
-  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
-  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM1_Init 2 */
-
-  /* USER CODE END TIM1_Init 2 */
-
 }
 
 /**
@@ -521,7 +286,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
+  huart1.Init.BaudRate = 9600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -569,7 +334,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 9600;
+  huart2.Init.BaudRate = 115200;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -590,22 +355,6 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -613,27 +362,31 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, TRIG1_Pin|TRIG2_Pin|LED_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(RS_DIR_GPIO_Port, RS_DIR_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, SPI_EN_Pin|LED_R_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, GATE1_Pin|GATE2_Pin|GATE3_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pins : TS4_EN_Pin TS5_EN_Pin TS6_EN_Pin */
-  GPIO_InitStruct.Pin = TS4_EN_Pin|TS5_EN_Pin|TS6_EN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pin : ZERO_CROSSING_Pin */
+  GPIO_InitStruct.Pin = ZERO_CROSSING_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(ZERO_CROSSING_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : TRIG1_Pin TRIG2_Pin LED_Pin */
+  GPIO_InitStruct.Pin = TRIG1_Pin|TRIG2_Pin|LED_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : RS_DIR_Pin */
   GPIO_InitStruct.Pin = RS_DIR_Pin;
@@ -642,34 +395,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(RS_DIR_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SPI_EN_Pin LED_R_Pin */
-  GPIO_InitStruct.Pin = SPI_EN_Pin|LED_R_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : ZERO_CROSSING_Pin */
-  GPIO_InitStruct.Pin = ZERO_CROSSING_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(ZERO_CROSSING_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : GATE1_Pin GATE2_Pin GATE3_Pin */
-  GPIO_InitStruct.Pin = GATE1_Pin|GATE2_Pin|GATE3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI4_15_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
-
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-
 
 /* Timer 1 overflow interrupt callback */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -679,20 +409,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		drive_fans(channel_array, OUTPUT_CHANNELS_NUMBER, gate_pulse_delay_counter_us);
 
 		gate_pulse_delay_counter_us += MAIN_TIMER_RESOLUTION_US;
-		update_parameter_counter_us += MAIN_TIMER_RESOLUTION_US;
-		log_parameters_counter_us += MAIN_TIMER_RESOLUTION_US;
+		log_counter_us += MAIN_TIMER_RESOLUTION_US;
 		rx_time_interval_counter += MAIN_TIMER_RESOLUTION_US;
 
-		if(update_parameter_counter_us >= WORKING_PARAMETERS_UPDATE_PERIOD_US)
+		if ( (log_counter_us > LOGGING_PERIOD_US))
 		{
-			update_working_parameters_pending_flag = true;
-			update_parameter_counter_us = 0;
-		}
-
-		if(log_parameters_counter_us >= LOG_PARAMETERS_UPDATE_PERIOD_US)
-		{
-			log_working_parameters_pending_flag = true;
-			log_parameters_counter_us = 0;
+			log_working_parameters();
+			log_counter_us = 0;
 		}
 	}
 
@@ -703,74 +426,70 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	}
 }
 
-/* ADC conversion finished callback */
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-//	logger_log(LEVEL_DEBUG, "HAL_ADC_ConvCpltCallback\r\n");
-}
 
 /* UART RX finished callback */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if (huart->Instance == USART1)
 	{
-		// debug UART received byte
+		// Modbus UART received byte
 		logger_log(LEVEL_DEBUG, "UART1 received 0x%02x\r\n", uart1_rx_byte);
-		logger_set_level((uint8_t)uart1_rx_byte-'0');
+
+		if (modbus_request_pending_flag == true)
+		{
+			return;
+		}
+		else
+		{
+			rx_time_interval_counter = 0;
+
+			if (rs485_collect_byte_to_buffer(&uart1_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
+			{
+				modbus_frame_byte_counter++;
+			}
+			else
+			{
+				logger_log(LEVEL_ERROR, "Cannot get byte to buffer (buffer full)\r\n");
+				modbus_frame_byte_counter = 0;
+			}
+		}
 
 		// Prepare for next byte receiving
-		HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
+		HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart1_rx_byte, 1);
+		if (status != HAL_OK)
+		{
+			logger_log(LEVEL_ERROR, "Cannot start huart2 receiving\r\n");
+		}
+	}
+
+	if (huart->Instance == USART2)
+	{
+		// debug UART received byte
+		logger_log(LEVEL_DEBUG, "UART2 received 0x%02x\r\n", uart2_rx_byte);
+		logger_set_level((uint8_t)uart2_rx_byte-'0');
+
+		// Prepare for next byte receiving
+		HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart2_rx_byte, 1);
 		if (status != HAL_OK)
 		{
 			logger_log(LEVEL_ERROR, "Cannot start huart1 receiving\r\n");
 		}
 	}
-	if (huart->Instance == USART2)
-	{
-		// Modbus UART received byte
-		logger_log(LEVEL_DEBUG, "UART2 received 0x%02x\r\n", uart2_rx_byte);
-
-			if (modbus_request_pending_flag == true)
-			{
-				return;
-			}
-			else
-			{
-				rx_time_interval_counter = 0;
-
-				if (rs485_collect_byte_to_buffer(&uart2_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
-				{
-					modbus_frame_byte_counter++;
-				}
-				else
-				{
-					logger_log(LEVEL_ERROR, "Cannot get byte to buffer (buffer full)\r\n");
-					modbus_frame_byte_counter = 0;
-				}
-			}
-
-			// Prepare for next byte receiving
-			HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
-			if (status != HAL_OK)
-			{
-				logger_log(LEVEL_ERROR, "Cannot start huart2 receiving\r\n");
-			}
-	}
-
-
 }
+
 
 /* UART TX finished callback */
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if (huart->Instance == USART1)
 	{
-		// debug uart transmit complete
-		logger_transmit_complete();
+		// Modbus UART transmit complete
 	}
 	if (huart->Instance == USART2)
 	{
-		// rs485 uart transmit complete
+
+		// Debug UART transmit complete
+		logger_transmit_complete();
 	}
 }
 
@@ -783,166 +502,23 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 }
 
 
-void update_working_params()
+void log_working_parameters()
 {
-	logger_log(LEVEL_INFO, "Updating working parameters\r\n");
-	HAL_GPIO_TogglePin(GPIOB, LED_R_Pin);
-
-	// get real ADC values to sensor_values array (for non-isolated sensors)
-	for (int i = 0; i < NON_ISOLATED_SENSOR_NUMBER; i++)
-	{
-		sensors[i].adc_value = dma_adc_array[i];
-	}
-	// get ADC values to sensor_values array (for isolated sensors)
-	// temporary workaround is to send only one request to SPI IC as there is a problem with handling multiple requests
-	// therefore one sensor is updated instead of all of them at once
-	static int shift = 0;
-	sensors[3+shift].adc_value = read_isolated_sensor(shift);
-	if (shift == 2)
-		shift = 0;
-	else
-		shift++;
-
-	// calculate temperatures from ADC values
-	sensors[0].temperature = ntc_to_temperature(sensors[0].adc_value);
-	sensors[1].temperature = ntc_to_temperature(sensors[1].adc_value);
-	sensors[2].temperature = ntc_to_temperature(sensors[2].adc_value);
-	sensors[3].temperature = ntc_to_temperature(sensors[3].adc_value);
-	sensors[4].temperature = ntc_to_temperature(sensors[4].adc_value);
-	sensors[5].temperature = ntc_to_temperature(sensors[5].adc_value);
-
-	temperature_error_state = check_for_error(sensors);
-
-	// run PI regulator calculations
-	for (uint8_t i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
-	{
-		if (channel_array[i].mode == MODE_AUTO)
-		{
-			channel_array[i].output_voltage_decpercent = pi_regulator(i, sensors[i].temperature, channel_array[i].setpoint);
-		}
-		channel_array[i].activation_delay_us = get_gate_delay_us(channel_array[i].output_voltage_decpercent);
-	}
-
-	update_working_parameters_pending_flag = false;
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)dma_adc_array, NON_ISOLATED_SENSOR_NUMBER); // start ADC read for next update cycle
-}
-
-void log_working_params(void)
-{
-	// log fan channel data
-	logger_log(LEVEL_INFO, "FAN CH | MODE | SETPOINT | VOLTAGE | DELAY_US  |\r\n");
-	logger_log(LEVEL_INFO, "-------|------|----------|---------|-----------|\r\n");
+	logger_log(LEVEL_INFO, "FAN CH | VOLTAGE | DELAY_US  |\r\n");
+	logger_log(LEVEL_INFO, "-------|---------|-----------|\r\n");
 	for (int i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
 	{
-		logger_log(LEVEL_INFO, "   %01d   |  %01d   |    %02d    |   %03d   |    %d   |\r\n", i+1, channel_array[i].mode, channel_array[i].setpoint/10, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
+		logger_log(LEVEL_INFO, "   %01d   |   %03d   |    %d   |\r\n", i+1, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
 	}
-
-	// log sensor data
-	logger_log(LEVEL_INFO, "SEN CH | ADC  | TEMP | USED | ERR |\r\n");
-	logger_log(LEVEL_INFO, "-------|------|------|------|-----|\r\n");
-	for (int channel = 0; channel < TOTAL_SENSOR_NUMBER; channel++)
-	{
-	  logger_log(LEVEL_INFO, "   %d   | %04d | %04d |  %d   |  %d  |\r\n", channel+1, sensors[channel].adc_value, sensors[channel].temperature, (int)(sensors[channel].connected_status), sensors[channel].error);
-	}
-
-	log_working_parameters_pending_flag = false;
-}
-
-
-int16_t pi_regulator(uint8_t channel, int16_t current_temp, int16_t setpoint)
-{
-	int16_t error;
-	static int16_t integral_error[3] = {0, 0, 0};
-	int16_t output_voltage_decpercent;
-
-	error = current_temp - setpoint;
-
-	integral_error[channel] = integral_error[channel] + error;
-
-	if ((error>0) && (integral_error[channel] <350*TIME_CONST))
-		integral_error[channel] = 350*TIME_CONST;
-
-	if (integral_error[channel] > INTEGRAL_ERROR_MAX)
-		integral_error[channel] = INTEGRAL_ERROR_MAX;
-	if (integral_error[channel] < INTEGRAL_ERROR_MIN)
-		integral_error[channel] = INTEGRAL_ERROR_MIN;
-
-	output_voltage_decpercent = PI_KP * error  + integral_error[channel]/TIME_CONST;
-
-	if (output_voltage_decpercent > MAX_OUTPUT_VOLTAGE_DECPERCENT)
-		output_voltage_decpercent = FULL_ON_OUTPUT_VOLTAGE_DECPERCENT;
-
-	if (output_voltage_decpercent < MIN_OUTPUT_VOLTAGE_DECPERCENT)
-		output_voltage_decpercent = FULL_OFF_OUTPUT_VOLTAGE_DECPERCENT;
-
-	return output_voltage_decpercent;
-};
-
-
-void update_modbus_registers(void)
-{
-	logger_log(LEVEL_INFO, "Updating Modbus registers with data from app before processing request\r\n");
-	modbus_set_reg_value(0, channel_array[0].mode);
-	modbus_set_reg_value(1, channel_array[1].mode);
-	modbus_set_reg_value(2, channel_array[2].mode);
-	modbus_set_reg_value(3, channel_array[0].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(4, channel_array[1].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(5, channel_array[2].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(6, channel_array[0].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(7, channel_array[1].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(8, channel_array[2].setpoint/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(9, sensors[0].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(10, sensors[1].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(11, sensors[2].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(12, sensors[3].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(13, sensors[4].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(14, sensors[5].temperature/TEMPERATURE_PRECISION_MULTIPLIER);
-	modbus_set_reg_value(15, temperature_error_state);
 }
 
 
 void update_app_data(void)
 {
 	logger_log(LEVEL_INFO, "Updating app data from registers\r\n");
-	channel_array[0].mode = modbus_get_reg_value(0);
-	channel_array[1].mode = modbus_get_reg_value(1);
-	channel_array[2].mode = modbus_get_reg_value(2);
-
-	if ((modbus_get_reg_value(3)) != channel_array[0].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
-	{
-		channel_array[0].mode = MODE_MANUAL;
-		channel_array[0].output_voltage_decpercent = modbus_get_reg_value(3)*VOLTAGE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(4) != channel_array[1].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
-	{
-		channel_array[1].mode = MODE_MANUAL;
-		channel_array[1].output_voltage_decpercent = modbus_get_reg_value(4)*VOLTAGE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(5) != channel_array[2].output_voltage_decpercent/VOLTAGE_PRECISION_MULTIPLIER) // check if value changed
-	{
-		channel_array[2].mode = MODE_MANUAL;
-		channel_array[2].output_voltage_decpercent = modbus_get_reg_value(5)*VOLTAGE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(6) != (channel_array[0].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
-	{
-		channel_array[0].mode = MODE_AUTO;
-		channel_array[0].setpoint = modbus_get_reg_value(6)*TEMPERATURE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(7) != (channel_array[1].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
-	{
-		channel_array[1].mode = MODE_AUTO;
-		channel_array[1].setpoint = modbus_get_reg_value(7)*TEMPERATURE_PRECISION_MULTIPLIER;
-	}
-
-	if (modbus_get_reg_value(8) != (channel_array[2].setpoint/TEMPERATURE_PRECISION_MULTIPLIER)) // check if value changed
-	{
-		channel_array[2].mode = MODE_AUTO;
-		channel_array[2].setpoint = modbus_get_reg_value(8)*TEMPERATURE_PRECISION_MULTIPLIER;
-	}
+	channel_array[0].output_voltage_decpercent = modbus_get_reg_value(0)*VOLTAGE_PRECISION_MULTIPLIER;
+	channel_array[1].output_voltage_decpercent = modbus_get_reg_value(1)*VOLTAGE_PRECISION_MULTIPLIER;
+	channel_array[2].output_voltage_decpercent = modbus_get_reg_value(2)*VOLTAGE_PRECISION_MULTIPLIER;
 }
 
 void reset_zero_crossing_counter(void)
@@ -953,9 +529,9 @@ void reset_zero_crossing_counter(void)
 	}
 }
 
-bool uart1_transmit_byte(uint8_t * byte)
+bool logger_transmit_byte(uint8_t * byte)
 {
-	HAL_StatusTypeDef retVal = HAL_UART_Transmit_IT(&huart1, (uint8_t*)byte, 1);
+	HAL_StatusTypeDef retVal = HAL_UART_Transmit_IT(&huart2, (uint8_t*)byte, 1);
 	if (retVal == HAL_OK)
 	{
 		return true;
@@ -964,64 +540,6 @@ bool uart1_transmit_byte(uint8_t * byte)
 	{
 		return false;
 	}
-}
-
-int read_isolated_sensor(int sensor_no)
-{
-	// reading data from SI8902 SPI in demand mode
-	uint8_t timeout = 100;
-	uint8_t data_buffer[3]; // byte 0: updated config, byte 1: ADC_H, byte 2: ADC_L
-	uint8_t command = getCommandByte(sensor_no);
-
-	// send command byte
-	spi_transmit_control(true);
-	HAL_StatusTypeDef status = HAL_SPI_Transmit(&hspi2, &command, sizeof(command), timeout);
-	if (status != HAL_OK)
-	{
-		logger_log(LEVEL_ERROR, "SPI transmit error, retval: %d\r\n", status);
-	}
-
-	spi_transmit_control(false);
-
-	// receive response
-	for (int i=0; i<3; i++)
-	{
-		delay_us(20);
-		spi_transmit_control(true);
-		status = HAL_SPI_Receive(&hspi2, (uint8_t *)data_buffer+i, 1, timeout);
-		spi_transmit_control(false);
-	}
-
-	if (status != HAL_OK)
-	{
-		logger_log(LEVEL_ERROR, "SPI receive error, retval: %d\r\n", status);
-	}
-
-	if(data_buffer[0] != command)
-	{
-		logger_log(LEVEL_ERROR, "SPI receive error, command byte echo doesn't match\r\n");
-	}
-
-	int value = getAdcValue(data_buffer[1], data_buffer[2]);
-	return value;
- }
-
-void spi_transmit_control(bool enable)
-{
-	if (enable)
-	{
-		 HAL_GPIO_WritePin(GPIOB, SPI_EN_Pin, GPIO_PIN_RESET);
-	}
-	else
-	{
-		  HAL_GPIO_WritePin(GPIOB, SPI_EN_Pin, GPIO_PIN_SET);
-	}
-}
-
-void delay_us(uint16_t us)
-{
-	__HAL_TIM_SET_COUNTER(&htim1,0);  // set the counter value a 0
-	while (__HAL_TIM_GET_COUNTER(&htim1) < us);  // wait for the counter to reach the us input in the parameter
 }
 
 /* USER CODE END 4 */
@@ -1034,7 +552,10 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-
+  __disable_irq();
+  while (1)
+  {
+  }
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -1050,9 +571,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
-     tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
