@@ -19,8 +19,8 @@ bool (*transmit_byte_method)(uint8_t *);
 bool is_initialized = false;
 
 /* Static methods */
-uint8_t get_level();
-void transmit_next_byte();
+static uint8_t get_level();
+static void transmit_next_byte();
 
 
 void logger_init(bool (*transmit_byte_callback)(uint8_t *))

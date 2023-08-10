@@ -79,7 +79,8 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
-void log_working_parameters(void);
+void log_working_params(void);
+void update_working_params(void);
 void reset_zero_crossing_counter(void);
 bool logger_transmit_byte(uint8_t * byte);
 bool is_modbus_buffer_empty(void);
@@ -149,6 +150,8 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  update_working_params();
   while (1)
   {
 	if (modbus_request_pending_flag == true)
@@ -171,8 +174,8 @@ int main(void)
 			logger_log(LEVEL_ERROR, "Can't process Modbus frame\r\n");
 		}
 
-		channel_array[0].output_voltage_decpercent = modbus_get_reg_value(0)*VOLTAGE_PRECISION_MULTIPLIER;
-		channel_array[1].output_voltage_decpercent = modbus_get_reg_value(1)*VOLTAGE_PRECISION_MULTIPLIER;
+		update_working_params();
+		log_working_params();
 
 		modbus_request_pending_flag = false;
 		modbus_buffer_write_pointer = modbus_buffer;
@@ -425,7 +428,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 		if ((log_counter_us > LOGGING_PERIOD_US))
 		{
-			log_working_parameters();
+			log_working_params();
 			log_counter_us = 0;
 		}
 	}
@@ -512,13 +515,35 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 }
 
 
-void log_working_parameters()
+void log_working_params()
 {
-	logger_log(LEVEL_INFO, "FAN CH | VOLTAGE | DELAY_US  |\r\n");
-	logger_log(LEVEL_INFO, "-------|---------|-----------|\r\n");
+	logger_log(LEVEL_INFO, "FAN CH | VOLTAGE | DELAY_US |\r\n");
+	logger_log(LEVEL_INFO, "-------|---------|----------|\r\n");
 	for (int i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
 	{
-		logger_log(LEVEL_INFO, "   %01d   |   %03d   |     %d     |\r\n", i+1, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
+		logger_log(LEVEL_INFO, "   %01d   |   %03d   |   %04d   |\r\n", i+1, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
+	}
+}
+
+
+void update_working_params()
+{
+	for (uint8_t channel = 0; channel < OUTPUT_CHANNELS_NUMBER; channel++)
+	{
+		// get voltage from Modbus registers
+		channel_array[channel].output_voltage_decpercent = modbus_get_reg_value(channel)*VOLTAGE_PRECISION_MULTIPLIER;
+
+		// calculate gate delay
+		if ( (channel_array[channel].output_voltage_decpercent <= MIN_OUTPUT_VOLTAGE_DECPERCENT) ||
+			 (channel_array[channel].output_voltage_decpercent >= MAX_OUTPUT_VOLTAGE_DECPERCENT) )
+		{
+			// set '0' to indicate constant gate state
+			channel_array[channel].activation_delay_us = 0;
+		}
+		else
+		{
+            channel_array[channel].activation_delay_us = get_gate_delay_us(channel_array[channel].output_voltage_decpercent);
+		}
 	}
 }
 

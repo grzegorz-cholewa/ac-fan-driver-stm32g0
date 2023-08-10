@@ -14,7 +14,7 @@ struct circular_buf_t {
 	bool full;
 };
 
-// Private functions
+// Static methods
 
 static void advance_pointer(cbuf_handle_t cbuf)
 {
