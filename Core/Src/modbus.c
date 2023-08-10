@@ -49,6 +49,9 @@ bool modbus_set_reg_value(uint16_t offset, int16_t value)
 
 bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * response, uint16_t * response_size)
 {
+	logger_log(LEVEL_DEBUG, "Processing Modbus frame\r\n");
+	print_buffer(request, request_size);
+
 	// check CRC
 	uint16_t crc_calculated = crc16_modbus(request, request_size-2);
 	uint16_t crc_received = get_short_little_endian(request+request_size-2);
@@ -57,9 +60,6 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 		logger_log(LEVEL_ERROR, "ERR: modbus_process_frame, CRC does not match\r\n");
 		return false;
 	}
-	
-	logger_log(LEVEL_DEBUG, "Processing Modbus frame\r\n");
-	print_buffer(request, request_size);
 
 	switch (request[POSITION_FUNCTION])
 	{
@@ -102,7 +102,7 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			asm("NOP"); // needed for turn off compiler warning "a label can only be part of a statement and a declaration is not a statement"
 			uint16_t register_offset = get_short_big_endian(request+2);
 			int16_t value_to_set = get_short_big_endian(request+4);
-			logger_log(LEVEL_DEBUG, "Writing register. Offset %d, value to set: %d\r\n", register_offset, value_to_set);
+			logger_log(LEVEL_INFO, "Writing register. Offset %d, value to set: %d\r\n", register_offset, value_to_set);
 
 			if (register_offset >= REGISTERS_NUMBER)
 			{
@@ -153,7 +153,7 @@ uint16_t get_short_big_endian(uint8_t * first_byte_pointer) // first byte is hig
 
 void print_buffer(uint8_t * buffer, uint16_t length)
 {
-    char* hexString = (char*)malloc(length * 5 + 3); // 2 characters per byte + null terminator
+    char* hexString = (char*)malloc(length * 5 + 3); // 2 characters per byte + termination & endline
     if (!hexString)
     {
         return;
@@ -164,7 +164,7 @@ void print_buffer(uint8_t * buffer, uint16_t length)
         sprintf(hexString + i * 5, "0x%02x ", buffer[i]); // Convert byte to 2-character hex representation
     }
 
-    sprintf(hexString + length * 5, "\r\n\0");
+    sprintf(hexString + length * 5, "\r\n");
 
 	logger_log(LEVEL_DEBUG, hexString, "\r\n");
 	free(hexString);

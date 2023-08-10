@@ -25,7 +25,6 @@
 #include <math.h>
 #include <string.h>
 #include <config.h>
-#include <rs485.h>
 #include <modbus.h>
 #include <gate_driver.h>
 #include <logger.h>
@@ -55,17 +54,15 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
-/* Flags */
-bool modbus_request_pending_flag = false;
-
 /* Global variables */
 uint32_t gate_pulse_delay_counter_us = 0;
 uint32_t log_counter_us = 0;
-uint32_t rx_time_interval_counter = 0;
-uint8_t received_modbus_frame[RS_RX_BUFFER_SIZE];
-uint16_t modbus_frame_byte_counter = 0;
+uint32_t modbus_rx_time_interval_counter = 0;
 uint8_t uart1_rx_byte = 0;
 uint8_t uart2_rx_byte = 0;
+uint8_t modbus_buffer[MODBUS_RX_BUFFER_SIZE];
+uint8_t * modbus_buffer_write_pointer = modbus_buffer;
+bool modbus_request_pending_flag = false;
 
 static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
 	{TRIG1_Pin, TRIG1_GPIO_Port, INIT_VOLTAGE, 0, GATE_IDLE},
@@ -83,9 +80,10 @@ static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 
 void log_working_parameters(void);
-void update_app_data(void);
 void reset_zero_crossing_counter(void);
 bool logger_transmit_byte(uint8_t * byte);
+bool is_modbus_buffer_empty(void);
+bool is_modbus_buffer_full(void);
 
 /* USER CODE END PFP */
 
@@ -129,7 +127,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
   logger_init(&logger_transmit_byte);
   logger_set_level(LEVEL_INFO);
-  rs485_init(&huart1);
   status = HAL_TIM_Base_Start_IT(&htim3);
   if (status != HAL_OK)
     {
@@ -154,26 +151,32 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//	  uint8_t test_array[3] = {1,1,1};
-//	  rs485_transmit_byte_array(test_array, 3);
-
 	if (modbus_request_pending_flag == true)
 	{
-		uint8_t response_buffer[RS_TX_BUFFER_SIZE];
+		uint8_t response_buffer[MODBUS_TX_BUFFER_SIZE];
 		uint16_t response_size;
-		if (modbus_process_frame(received_modbus_frame, modbus_frame_byte_counter, response_buffer, &response_size))
+		int modbus_frame_len = modbus_buffer_write_pointer - modbus_buffer;
+		if (modbus_process_frame(modbus_buffer, modbus_frame_len, response_buffer, &response_size))
 		{
-			rs485_transmit_byte_array(response_buffer, response_size);
+			HAL_GPIO_WritePin(RS_DIR_GPIO_Port, RS_DIR_Pin, GPIO_PIN_SET);
+			HAL_StatusTypeDef status = HAL_UART_Transmit(&huart1, response_buffer, response_size, 100);
+			if (status != HAL_OK)
+			{
+				logger_log(LEVEL_ERROR, "RS485: cannot send buffer");
+			}
+			HAL_GPIO_WritePin(RS_DIR_GPIO_Port, RS_DIR_Pin, GPIO_PIN_RESET);
 		}
 		else
 		{
 			logger_log(LEVEL_ERROR, "Can't process Modbus frame\r\n");
 		}
-		update_app_data(); // update app with new data from processed Modbus frame (needed if it was write command)
+
+		channel_array[0].output_voltage_decpercent = modbus_get_reg_value(0)*VOLTAGE_PRECISION_MULTIPLIER;
+		channel_array[1].output_voltage_decpercent = modbus_get_reg_value(1)*VOLTAGE_PRECISION_MULTIPLIER;
 
 		modbus_request_pending_flag = false;
-		modbus_frame_byte_counter = 0;
-		memset(received_modbus_frame, 0, sizeof(received_modbus_frame)); // clear buffer
+		modbus_buffer_write_pointer = modbus_buffer;
+		memset(modbus_buffer, 0, sizeof(modbus_buffer)); // clear buffer
 	}
     /* USER CODE END WHILE */
 
@@ -418,19 +421,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
 		gate_pulse_delay_counter_us += MAIN_TIMER_RESOLUTION_US;
 		log_counter_us += MAIN_TIMER_RESOLUTION_US;
-		rx_time_interval_counter += MAIN_TIMER_RESOLUTION_US;
+		modbus_rx_time_interval_counter += MAIN_TIMER_RESOLUTION_US;
 
-		if ( (log_counter_us > LOGGING_PERIOD_US))
+		if ((log_counter_us > LOGGING_PERIOD_US))
 		{
 			log_working_parameters();
 			log_counter_us = 0;
 		}
 	}
 
-	if ( (rx_time_interval_counter > MAX_TIME_BETWEEN_FRAMES_US) && (!rs485_is_buffer_empty()) )
+	if ( (modbus_rx_time_interval_counter > MAX_TIME_BETWEEN_FRAMES_US) && (!is_modbus_buffer_empty()) )
 	{
 		modbus_request_pending_flag = true;
-    rs485_get_frame(received_modbus_frame, RS_RX_BUFFER_SIZE);
 	}
 }
 
@@ -438,27 +440,28 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 /* UART RX finished callback */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
+	// Modbus UART received byte
 	if (huart->Instance == USART1)
 	{
-		// Modbus UART received byte
 		logger_log(LEVEL_DEBUG, "UART1 (Modbus) received 0x%02x\r\n", uart1_rx_byte);
 
-		if (modbus_request_pending_flag == true)
+		if (modbus_request_pending_flag == true) // don't store new bytes while previous request is processed
 		{
 			return;
 		}
 		else
 		{
-			rx_time_interval_counter = 0;
+			modbus_rx_time_interval_counter = 0;
 
-			if (rs485_store_byte(&uart1_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
+			if (!is_modbus_buffer_full())
 			{
-				modbus_frame_byte_counter++;
+				*modbus_buffer_write_pointer = uart1_rx_byte;
+				modbus_buffer_write_pointer++;
 			}
 			else
 			{
 				logger_log(LEVEL_ERROR, "Cannot get byte to buffer (buffer full)\r\n");
-				modbus_frame_byte_counter = 0;
+				modbus_buffer_write_pointer =  modbus_buffer;
 			}
 		}
 
@@ -470,9 +473,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		}
 	}
 
+	// Serial debug UART received byte
 	if (huart->Instance == USART2)
 	{
-		// debug UART received byte
 		logger_log(LEVEL_DEBUG, "UART2 (debug) received 0x%02x\r\n", uart2_rx_byte);
 		logger_set_level((uint8_t)uart2_rx_byte-'0');
 
@@ -515,15 +518,10 @@ void log_working_parameters()
 	logger_log(LEVEL_INFO, "-------|---------|-----------|\r\n");
 	for (int i = 0; i < OUTPUT_CHANNELS_NUMBER; i++)
 	{
-		logger_log(LEVEL_INFO, "   %01d   |   %03d   |    %d   |\r\n", i+1, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
+		logger_log(LEVEL_INFO, "   %01d   |   %03d   |     %d     |\r\n", i+1, channel_array[i].output_voltage_decpercent/10, channel_array[i].activation_delay_us);
 	}
 }
 
-void update_app_data(void)
-{
-	channel_array[0].output_voltage_decpercent = modbus_get_reg_value(0)*VOLTAGE_PRECISION_MULTIPLIER;
-	channel_array[1].output_voltage_decpercent = modbus_get_reg_value(1)*VOLTAGE_PRECISION_MULTIPLIER;
-}
 
 void reset_zero_crossing_counter(void)
 {
@@ -532,6 +530,7 @@ void reset_zero_crossing_counter(void)
 		gate_pulse_delay_counter_us = ZERO_CROSSING_DETECTION_OFFSET_US;
 	}
 }
+
 
 bool logger_transmit_byte(uint8_t * byte)
 {
@@ -544,6 +543,24 @@ bool logger_transmit_byte(uint8_t * byte)
 	{
 		return false;
 	}
+}
+
+
+bool is_modbus_buffer_empty(void)
+{
+	if (modbus_buffer_write_pointer == modbus_buffer)
+		return true;
+	else
+		return false;
+}
+
+
+bool is_modbus_buffer_full(void)
+{
+	if (modbus_buffer_write_pointer <= modbus_buffer + MODBUS_RX_BUFFER_SIZE)
+		return false;
+	else
+		return true;
 }
 
 /* USER CODE END 4 */
