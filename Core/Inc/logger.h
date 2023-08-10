@@ -1,13 +1,18 @@
-// Simple logger for STM32 that uses STM's USB implementation to log data through USB CDC
+/** 
+ * OVERVIEW 
+ * Simple logger for handling logs. Supports logging levels.
+ * It is not implementing transmission itself, for which callback is stored during init.
 
-// 1. USB must be initialized outside of this module, before logging anything
-// 2. Default log level is LEVEL_INFO
-// 3. Logger messages can be formatted the same way like printf arguments
-// 4. This header must be included to any file using logger
-
-// Sample use:
-// logger_set_level(LEVEL_ERROR); // set log level first
-// log_text(LEVEL_ERROR, "Error code: %d\r\n", err_code);
+ * HOW TO USE
+ * logger_init(&logger_transmit_byte); // pass byte transmit function pointer
+ * logger_set_level(LEVEL_ERROR);
+ * log_text(LEVEL_ERROR, "Error code: %d\r\n", err_code);
+ *
+ * Default log level is LEVEL_INFO
+ * Logger messages can be formatted the same way like printf arguments
+ * This header must be included to any file using logger
+ * It uses circular buffer as a dependency
+**/
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -37,6 +42,7 @@ int logger_log(int log_level, char * format, ...);
 
 
 /**
- * It must be called by callback from previous byte transmitted.
+ * It must be called externally after previous byte is transmitted.
+ * Call it in UART transmit complete interrupt if possible.
  */
-void logger_transmit_complete(void);
+void logger_transmit_next_byte(void);

@@ -23,7 +23,7 @@
 
 /* OTHER PARAMS */
 #define MAIN_TIMER_RESOLUTION_US 100
-#define LOGGING_PERIOD_US 1000000 // this is also a period of triggering PI regulator
+#define LOGGING_PERIOD_US 10000000 // this is also a period of triggering PI regulator
 
 /* CONSTANTS */
 #define PI (3.14)

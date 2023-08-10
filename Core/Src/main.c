@@ -68,7 +68,7 @@ uint8_t uart1_rx_byte = 0;
 uint8_t uart2_rx_byte = 0;
 
 static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
-	{TRIG1_Pin, TRIG1_GPIO_Port,  INIT_VOLTAGE, 0, GATE_IDLE},
+	{TRIG1_Pin, TRIG1_GPIO_Port, INIT_VOLTAGE, 0, GATE_IDLE},
 	{TRIG2_Pin, TRIG2_GPIO_Port, INIT_VOLTAGE, 0, GATE_IDLE},
 };
 
@@ -129,7 +129,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   logger_init(&logger_transmit_byte);
   logger_set_level(LEVEL_INFO);
-  rs485_init(&huart2);
+  rs485_init(&huart1);
   status = HAL_TIM_Base_Start_IT(&htim3);
   if (status != HAL_OK)
     {
@@ -140,11 +140,11 @@ int main(void)
     {
   	  logger_log(LEVEL_ERROR, "Cannot start UART1 receiving\r\n");
     }
-    status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
-    if (status != HAL_OK)
-    {
-  	  logger_log(LEVEL_ERROR, "Cannot start UART2 receiving\r\n");
-    }
+   status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
+   if (status != HAL_OK)
+   {
+ 	  logger_log(LEVEL_ERROR, "Cannot start UART2 receiving\r\n");
+   }
 
     logger_log(LEVEL_INFO, "App init done\r\n");
 
@@ -154,6 +154,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+//	  uint8_t test_array[3] = {1,1,1};
+//	  rs485_transmit_byte_array(test_array, 3);
 
 	if (modbus_request_pending_flag == true)
 	{
@@ -172,7 +174,7 @@ int main(void)
 		modbus_request_pending_flag = false;
 		modbus_frame_byte_counter = 0;
 		memset(received_modbus_frame, 0, sizeof(received_modbus_frame)); // clear buffer
-		}
+	}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -381,6 +383,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(ZERO_CROSSING_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : CFG1_Pin CFG2_Pin CFG3_Pin */
+  GPIO_InitStruct.Pin = CFG1_Pin|CFG2_Pin|CFG3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
   /*Configure GPIO pins : TRIG1_Pin TRIG2_Pin LED_Pin */
   GPIO_InitStruct.Pin = TRIG1_Pin|TRIG2_Pin|LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -419,10 +427,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		}
 	}
 
-	if ( (rx_time_interval_counter > MAX_TIME_BETWEEN_FRAMES_US) && (!rs485_rx_buffer_empty()) )
+	if ( (rx_time_interval_counter > MAX_TIME_BETWEEN_FRAMES_US) && (!rs485_is_buffer_empty()) )
 	{
-		rs485_get_frame(received_modbus_frame, RS_RX_BUFFER_SIZE);
 		modbus_request_pending_flag = true;
+    rs485_get_frame(received_modbus_frame, RS_RX_BUFFER_SIZE);
 	}
 }
 
@@ -433,7 +441,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	if (huart->Instance == USART1)
 	{
 		// Modbus UART received byte
-		logger_log(LEVEL_DEBUG, "UART1 received 0x%02x\r\n", uart1_rx_byte);
+		logger_log(LEVEL_DEBUG, "UART1 (Modbus) received 0x%02x\r\n", uart1_rx_byte);
 
 		if (modbus_request_pending_flag == true)
 		{
@@ -443,7 +451,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		{
 			rx_time_interval_counter = 0;
 
-			if (rs485_collect_byte_to_buffer(&uart1_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
+			if (rs485_store_byte(&uart1_rx_byte) && (modbus_frame_byte_counter < RS_RX_BUFFER_SIZE))
 			{
 				modbus_frame_byte_counter++;
 			}
@@ -455,24 +463,24 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		}
 
 		// Prepare for next byte receiving
-		HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart1_rx_byte, 1);
+		HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart1_rx_byte, 1);
 		if (status != HAL_OK)
 		{
-			logger_log(LEVEL_ERROR, "Cannot start huart2 receiving\r\n");
+			logger_log(LEVEL_ERROR, "Cannot start UART1 receiving\r\n");
 		}
 	}
 
 	if (huart->Instance == USART2)
 	{
 		// debug UART received byte
-		logger_log(LEVEL_DEBUG, "UART2 received 0x%02x\r\n", uart2_rx_byte);
+		logger_log(LEVEL_DEBUG, "UART2 (debug) received 0x%02x\r\n", uart2_rx_byte);
 		logger_set_level((uint8_t)uart2_rx_byte-'0');
 
 		// Prepare for next byte receiving
-		HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart1, &uart2_rx_byte, 1);
+		HAL_StatusTypeDef status = HAL_UART_Receive_IT(&huart2, &uart2_rx_byte, 1);
 		if (status != HAL_OK)
 		{
-			logger_log(LEVEL_ERROR, "Cannot start huart1 receiving\r\n");
+			logger_log(LEVEL_ERROR, "Cannot start UART2 receiving\r\n");
 		}
 	}
 }
@@ -487,9 +495,8 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 	}
 	if (huart->Instance == USART2)
 	{
-
 		// Debug UART transmit complete
-		logger_transmit_complete();
+		logger_transmit_next_byte();
 	}
 }
 
@@ -512,13 +519,10 @@ void log_working_parameters()
 	}
 }
 
-
 void update_app_data(void)
 {
-	logger_log(LEVEL_INFO, "Updating app data from registers\r\n");
 	channel_array[0].output_voltage_decpercent = modbus_get_reg_value(0)*VOLTAGE_PRECISION_MULTIPLIER;
 	channel_array[1].output_voltage_decpercent = modbus_get_reg_value(1)*VOLTAGE_PRECISION_MULTIPLIER;
-	channel_array[2].output_voltage_decpercent = modbus_get_reg_value(2)*VOLTAGE_PRECISION_MULTIPLIER;
 }
 
 void reset_zero_crossing_counter(void)

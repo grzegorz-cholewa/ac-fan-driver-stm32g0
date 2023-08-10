@@ -1,4 +1,6 @@
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <modbus.h>
 #include <crc.h>
 #include <config.h>
@@ -56,6 +58,9 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 		return false;
 	}
 	
+	logger_log(LEVEL_DEBUG, "Processing Modbus frame\r\n");
+	print_buffer(request, request_size);
+
 	switch (request[POSITION_FUNCTION])
 	{
 		case FUNCTION_READ_MULTIPLE:
@@ -63,7 +68,7 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			uint16_t first_address_offset = get_short_big_endian(request+2);
 			uint16_t registers_number = get_short_big_endian(request+4);
 			logger_log(LEVEL_INFO, "Modbus read request received, function 0x%02x, first register offset: %d, number of registers: %d\r\n", FUNCTION_READ_MULTIPLE, first_address_offset, registers_number);
-			print_buffer(request, request_size);
+
 
 			if ( (first_address_offset >= REGISTERS_NUMBER) || (registers_number > REGISTERS_NUMBER) )
 			{
@@ -89,7 +94,6 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			uint16_t crc_value = crc16_modbus(response, (*response_size)-2);
 			*(response + 3 + 2*registers_number) = get_low_byte(crc_value);
 			*(response + 4 + 2*registers_number) = get_high_byte(crc_value);
-
 			break;
 	
 		case FUNCTION_WRITE_SINGLE:
@@ -115,6 +119,10 @@ bool modbus_process_frame(uint8_t * request, uint16_t request_size, uint8_t * re
 			logger_log(LEVEL_ERROR, "Unsupported Modbus function\r\n");
 			return false;
 	}
+
+	logger_log(LEVEL_DEBUG, "Modbus response\r\n");
+	print_buffer(response, *response_size);
+
 	return true;
 }
 
@@ -145,8 +153,19 @@ uint16_t get_short_big_endian(uint8_t * first_byte_pointer) // first byte is hig
 
 void print_buffer(uint8_t * buffer, uint16_t length)
 {
-	for (int index = 0; index < length; index++)
-	{
-		logger_log(LEVEL_DEBUG, "0x%02x\r\n", *(buffer + index));
-	}
+    char* hexString = (char*)malloc(length * 5 + 3); // 2 characters per byte + null terminator
+    if (!hexString)
+    {
+        return;
+    }
+
+    for (size_t i = 0; i < length; i++)
+    {
+        sprintf(hexString + i * 5, "0x%02x ", buffer[i]); // Convert byte to 2-character hex representation
+    }
+
+    sprintf(hexString + length * 5, "\r\n\0");
+
+	logger_log(LEVEL_DEBUG, hexString, "\r\n");
+	free(hexString);
 }

@@ -63,6 +63,12 @@ void Error_Handler(void);
 #define DBG_TX_GPIO_Port GPIOA
 #define DBG_RX_Pin GPIO_PIN_3
 #define DBG_RX_GPIO_Port GPIOA
+#define CFG1_Pin GPIO_PIN_0
+#define CFG1_GPIO_Port GPIOB
+#define CFG2_Pin GPIO_PIN_1
+#define CFG2_GPIO_Port GPIOB
+#define CFG3_Pin GPIO_PIN_2
+#define CFG3_GPIO_Port GPIOB
 #define TRIG1_Pin GPIO_PIN_10
 #define TRIG1_GPIO_Port GPIOA
 #define TRIG2_Pin GPIO_PIN_11

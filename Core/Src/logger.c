@@ -16,6 +16,7 @@ bool transmitting_now;
 uint8_t buffer[buffer_size];
 uint8_t transmit_buffer;
 bool (*transmit_byte_method)(uint8_t *);
+bool is_initialized = false;
 
 /* Static methods */
 uint8_t get_level();
@@ -28,6 +29,7 @@ void logger_init(bool (*transmit_byte_callback)(uint8_t *))
 	level = LEVEL_INFO; // default level
 	transmitting_now = false;
 	cbuf = circular_buf_init(buffer, buffer_size);
+	is_initialized = true;
 	logger_log(LEVEL_INFO, "Logger init complete\r\n");
 }
 
@@ -51,13 +53,18 @@ void logger_set_level(int level_to_set)
 	}
 	else
 	{
-		logger_log(LEVEL_INFO, "Wrong logging level. Setting to default (INFO)\r\n");
+		logger_log(LEVEL_INFO, "Wrong logging level\r\n");
 	}
 }
 
 
 int logger_log(int log_level, char * format, ...)
 {
+	if (!is_initialized)
+	{
+		return 0;
+	}
+	
 	if (get_level() < log_level)
 	{
 		return 0;
@@ -98,7 +105,7 @@ int logger_log(int log_level, char * format, ...)
 }
 
 
-void logger_transmit_complete()
+void logger_transmit_next_byte()
 {
 	transmitting_now = false;
 	transmit_next_byte();
