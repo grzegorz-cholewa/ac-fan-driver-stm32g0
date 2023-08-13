@@ -6,7 +6,7 @@
 
 /* ADJUSTABLE PARAMETERS */
 #define DEVICE_ID 0x01
-#define REGISTERS_NUMBER 2
+#define REGISTERS_NUMBER 3
 
 typedef int16_t modbus_register;
 

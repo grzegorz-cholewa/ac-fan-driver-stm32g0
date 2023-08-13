@@ -55,14 +55,16 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 
 /* Global variables */
-static uint32_t gate_pulse_delay_counter_us = 0;
-static uint32_t log_counter_us = 0;
-static uint32_t modbus_rx_time_interval_counter = 0;
+static uint32_t gate_pulse_delay_counter_us = 0; // software timer used for driving gates
+static uint32_t zero_crossing_watchdog_counter_us = 0; // software timer counter for periodic zero crossing presence check
+static uint32_t zero_crossing_events_counter = 0; // counts zero crossing events for periodic interrupt presence check
+static uint32_t log_counter_us = 0; // software timer counter for periodic serial log
+static uint32_t modbus_rx_time_interval_counter = 0; // software timer for Modbus frame receive end
+static uint8_t modbus_buffer[MODBUS_RX_BUFFER_SIZE]; // Modbus buffer for incoming frame
+static uint8_t * modbus_buffer_write_pointer = modbus_buffer; // write pointer for getting bytes to Modbus RX buffer
+static bool modbus_request_pending_flag = false; // Flag indicating Modbus frame was collected and is ready for processing
 static uint8_t uart1_rx_byte = 0;
 static uint8_t uart2_rx_byte = 0;
-static uint8_t modbus_buffer[MODBUS_RX_BUFFER_SIZE];
-static uint8_t * modbus_buffer_write_pointer = modbus_buffer;
-static bool modbus_request_pending_flag = false;
 
 static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
 	{TRIG1_Pin, TRIG1_GPIO_Port, INIT_VOLTAGE, 0, GATE_IDLE},
@@ -426,11 +428,28 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		gate_pulse_delay_counter_us += MAIN_TIMER_RESOLUTION_US;
 		log_counter_us += MAIN_TIMER_RESOLUTION_US;
 		modbus_rx_time_interval_counter += MAIN_TIMER_RESOLUTION_US;
+		zero_crossing_watchdog_counter_us += MAIN_TIMER_RESOLUTION_US;
 
 		if ((log_counter_us > LOGGING_PERIOD_US))
 		{
 			log_working_params();
 			log_counter_us = 0;
+		}
+
+		if (zero_crossing_watchdog_counter_us >= ZERO_CROSSING_CHECK_PERIOD_US)
+		{
+			// no zero crossing events since last check, set error
+			if (zero_crossing_events_counter == 0)
+			{
+				modbus_set_reg_value(2, 1);
+			}
+			// detected any zero crossing events since last check, clear error
+			else
+			{
+				modbus_set_reg_value(2, 0);
+			}
+			zero_crossing_watchdog_counter_us = 0;
+			zero_crossing_events_counter = 0;
 		}
 	}
 
@@ -517,6 +536,9 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
   {
 	gate_pulse_delay_counter_us = ZERO_CROSSING_DETECTION_OFFSET_US;
   }
+
+  zero_crossing_events_counter++;
+
 }
 
 

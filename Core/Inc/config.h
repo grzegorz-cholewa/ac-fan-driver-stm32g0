@@ -5,9 +5,6 @@
 /* HARDWARE-DEPENDENT CONFIG */
 #define OUTPUT_CHANNELS_NUMBER 2
 
-/* LOGGING */
-#define LOGGING_PERIOD_US 5000000 // this is also a period of triggering PI regulator
-
 /* GATE DRIVING PARAMETERS */
 #define ZERO_CROSSING_DETECTION_OFFSET_US 400
 #define INIT_VOLTAGE (0 * VOLTAGE_PRECISION_MULTIPLIER)
@@ -23,6 +20,8 @@
 #define MAX_TIME_BETWEEN_FRAMES_US 4500 //((1000000/RS_BAUD_RATE)*11*4) //>((1000000/RS_BAUD_RATE)*11*4) //min 3.5 char between messages
 
 /* OTHER */
+#define ZERO_CROSSING_CHECK_PERIOD_US 1000000 // zero crossing presence detection execution period
+#define LOGGING_PERIOD_US 5000000 // this is also a period of triggering PI regulator
 #define MAIN_TIMER_RESOLUTION_US 100
 #define HALF_SINE_PERIOD_US 10000 // constant for 50Hz AC voltage
 #define VOLTAGE_PRECISION_MULTIPLIER 10
