@@ -59,6 +59,7 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define ZERO_CROSSING_Pin GPIO_PIN_1
 #define ZERO_CROSSING_GPIO_Port GPIOA
+#define ZERO_CROSSING_EXTI_IRQn EXTI0_1_IRQn
 #define DBG_TX_Pin GPIO_PIN_2
 #define DBG_TX_GPIO_Port GPIOA
 #define DBG_RX_Pin GPIO_PIN_3

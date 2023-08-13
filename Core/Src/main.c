@@ -55,14 +55,14 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 
 /* Global variables */
-uint32_t gate_pulse_delay_counter_us = 0;
-uint32_t log_counter_us = 0;
-uint32_t modbus_rx_time_interval_counter = 0;
-uint8_t uart1_rx_byte = 0;
-uint8_t uart2_rx_byte = 0;
-uint8_t modbus_buffer[MODBUS_RX_BUFFER_SIZE];
-uint8_t * modbus_buffer_write_pointer = modbus_buffer;
-bool modbus_request_pending_flag = false;
+static uint32_t gate_pulse_delay_counter_us = 0;
+static uint32_t log_counter_us = 0;
+static uint32_t modbus_rx_time_interval_counter = 0;
+static uint8_t uart1_rx_byte = 0;
+static uint8_t uart2_rx_byte = 0;
+static uint8_t modbus_buffer[MODBUS_RX_BUFFER_SIZE];
+static uint8_t * modbus_buffer_write_pointer = modbus_buffer;
+static bool modbus_request_pending_flag = false;
 
 static channel_t channel_array[OUTPUT_CHANNELS_NUMBER] = {
 	{TRIG1_Pin, TRIG1_GPIO_Port, INIT_VOLTAGE, 0, GATE_IDLE},
@@ -81,7 +81,6 @@ static void MX_TIM3_Init(void);
 
 void log_working_params(void);
 void update_working_params(void);
-void reset_zero_crossing_counter(void);
 bool logger_transmit_byte(uint8_t * byte);
 bool is_modbus_buffer_empty(void);
 bool is_modbus_buffer_full(void);
@@ -165,7 +164,7 @@ int main(void)
 			HAL_StatusTypeDef status = HAL_UART_Transmit(&huart1, response_buffer, response_size, 100);
 			if (status != HAL_OK)
 			{
-				logger_log(LEVEL_ERROR, "RS485: cannot send buffer");
+				logger_log(LEVEL_ERROR, "Modbus cannot send response");
 			}
 			HAL_GPIO_WritePin(RS_DIR_GPIO_Port, RS_DIR_Pin, GPIO_PIN_RESET);
 		}
@@ -175,8 +174,6 @@ int main(void)
 		}
 
 		update_working_params();
-		log_working_params();
-
 		modbus_request_pending_flag = false;
 		modbus_buffer_write_pointer = modbus_buffer;
 		memset(modbus_buffer, 0, sizeof(modbus_buffer)); // clear buffer
@@ -385,7 +382,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : ZERO_CROSSING_Pin */
   GPIO_InitStruct.Pin = ZERO_CROSSING_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(ZERO_CROSSING_GPIO_Port, &GPIO_InitStruct);
 
@@ -408,6 +405,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(RS_DIR_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -511,7 +512,11 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
   /* Prevent unused argument(s) compilation warning */
   UNUSED(GPIO_Pin);
-  reset_zero_crossing_counter();
+  // reset zero crossing counter
+  if (gate_pulse_delay_counter_us > HALF_SINE_PERIOD_US - 500) // additional check to avoid some random reset
+  {
+	gate_pulse_delay_counter_us = ZERO_CROSSING_DETECTION_OFFSET_US;
+  }
 }
 
 
@@ -544,15 +549,6 @@ void update_working_params()
 		{
             channel_array[channel].activation_delay_us = get_gate_delay_us(channel_array[channel].output_voltage_decpercent);
 		}
-	}
-}
-
-
-void reset_zero_crossing_counter(void)
-{
-	if (gate_pulse_delay_counter_us > HALF_SINE_PERIOD_US - 500)
-	{
-		gate_pulse_delay_counter_us = ZERO_CROSSING_DETECTION_OFFSET_US;
 	}
 }
 
